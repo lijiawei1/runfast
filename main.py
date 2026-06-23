@@ -14,19 +14,19 @@ from cli import play_turn, execute_forced_move
 from config_loader import load_yaml_config, validate_and_parse_scenario
 
 
-def setup_game():
+def setup_game(num_players: int = 5):
     """通用初始化：发牌 → 抢A → 重排手牌 → 返回初始 GameState。
     
     若无人抢A，返回 None。
     """
-    deck = build_deck()
-    hands = shuffle_and_deal(deck)
+    deck = build_deck(num_players)
+    hands = shuffle_and_deal(deck, num_players)
 
     print("=== 发牌完成 ===")
     for i, hand in enumerate(hands):
         print(f"玩家{i}: {sorted(hand, key=lambda c: c.order)}")
 
-    bidder, updated_hands = take_bid(hands)
+    bidder, updated_hands = take_bid(hands, num_players)
     if bidder is None:
         print("\n无人抢A，退出训练模式")
         return None
@@ -39,7 +39,7 @@ def setup_game():
 
     # ── 重新排列手牌：★（bidder）移到索引 0 ──
     reordered = [updated_hands[bidder]]
-    for i in range(5):
+    for i in range(num_players):
         if i != bidder:
             reordered.append(updated_hands[i])
 
@@ -68,6 +68,7 @@ def setup_game_from_config(config_path: str, scenario_id: int | None = None) -> 
     """
     config_data = load_yaml_config(config_path)
     bidder, hands, info = validate_and_parse_scenario(config_data, scenario_id)
+    num_players = len(hands)  # 从解析后的手牌数获取玩家数
 
     # ── 打印场景信息 ──
     print(f"\n📌 场景 [{info['id']}] {info['name']}")
@@ -119,7 +120,7 @@ def setup_game_from_config(config_path: str, scenario_id: int | None = None) -> 
 
     # ── 重排：★ 移到索引 0 ──
     reordered = [updated_hands[bidder]]
-    for i in range(5):
+    for i in range(num_players):
         if i != bidder:
             reordered.append(updated_hands[i])
 
@@ -229,17 +230,19 @@ def mode2_game_loop(state: GameState) -> None:
                 state = play_turn(state)
 
 
-def main(config_path: str | None = None, scene_id: int | None = None):
+def main(config_path: str | None = None, scene_id: int | None = None,
+         num_players: int = 5):
     """主入口：模式选择 → 进入对应训练流程。
 
     Args:
         config_path: 配置文件路径（None→随机发牌）
         scene_id: 场景ID（None→交互选择）
+        num_players: 玩家人数（5/6/7/8，默认5）
     """
     if config_path:
         state = setup_game_from_config(config_path, scene_id)
     else:
-        state = setup_game()
+        state = setup_game(num_players)
     if state is None:
         return
 
@@ -443,6 +446,10 @@ if __name__ == "__main__":
                         help="指定场景ID（需配合 --load 使用）")
     parser.add_argument("--web", action="store_true",
                         help="启动 Streamlit Web 界面")
+    parser.add_argument(
+        "--players", type=int, choices=[5, 6, 7, 8], default=5,
+        help="玩家人数（5/6/7/8），默认5人局"
+    )
     args = parser.parse_args()
 
     if args.web:
@@ -453,4 +460,5 @@ if __name__ == "__main__":
     elif args.test_multi_da:
         test_multi_da_verification()
     else:
-        main(config_path=args.load, scene_id=args.scene)
+        main(config_path=args.load, scene_id=args.scene,
+             num_players=args.players)

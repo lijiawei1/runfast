@@ -16,12 +16,13 @@ def _apply_move(
       - 接力压制: (new_mask, trick_obj, [orders])                       (3 元组)
     """
     move = _ensure_move(move)
+    n = state.num_players
     masks = list(state.masks)
     new_mask = move.new_mask
     new_trick = move.trick if move.trick is not None else Trick(move.type, move.rank, move.top_suit)
 
     masks[player] = new_mask
-    next_turn = (state.turn + 1) % 5
+    next_turn = (state.turn + 1) % n
 
     # 无论自由出牌还是响应，出牌人都是当前的"牌权持有者"，
     # 一圈无人管时回到此人继续出（DPEC: "出牌人继续出"）。
@@ -46,7 +47,7 @@ def solve(state: GameState) -> bool:
     """
     if state.masks[0] == 0:
         return True
-    for i in range(1, 5):
+    for i in range(1, state.num_players):
         if state.masks[i] == 0:
             return False
 
@@ -58,8 +59,9 @@ def solve(state: GameState) -> bool:
 
 def _solve_star_turn(state: GameState) -> bool:
     """★ 的回合一 存在任一种出牌通向 True 即返回 True"""
+    n = state.num_players
     mask = state.masks[0]
-    next_player_mask = state.masks[(state.turn + 1) % 5]
+    next_player_mask = state.masks[(state.turn + 1) % n]
 
     if state.trick is None:
         moves = get_legal_moves_free(mask, next_player_mask)
@@ -67,7 +69,7 @@ def _solve_star_turn(state: GameState) -> bool:
         moves = get_legal_moves_response(mask, state.trick, next_player_mask)
 
         if not moves:
-            next_t = (state.turn + 1) % 5
+            next_t = (state.turn + 1) % n
             if next_t == state.starter:
                 ns = GameState(state.masks, None, state.starter, state.starter)
             else:
@@ -83,9 +85,10 @@ def _solve_star_turn(state: GameState) -> bool:
 
 def _solve_opponent_turn(state: GameState) -> bool:
     """对手回合 — 所有合法出牌都通向 True 才返回 True"""
+    n = state.num_players
     player = state.turn
     mask = state.masks[player]
-    next_player_mask = state.masks[(player + 1) % 5]
+    next_player_mask = state.masks[(player + 1) % n]
 
     if state.trick is None:
         moves = get_legal_moves_free(mask, next_player_mask)
@@ -93,7 +96,7 @@ def _solve_opponent_turn(state: GameState) -> bool:
         moves = get_legal_moves_response(mask, state.trick, next_player_mask)
 
         if not moves:
-            next_t = (state.turn + 1) % 5
+            next_t = (state.turn + 1) % n
             if next_t == state.starter:
                 ns = GameState(state.masks, None, state.starter, state.starter)
             else:
@@ -124,8 +127,9 @@ def analyze_moves(state: GameState) -> tuple[bool | None, list, list]:
     if state.turn != 0:
         return (None, [], [])
 
+    n = state.num_players
     mask = state.masks[0]
-    next_player_mask = state.masks[(state.turn + 1) % 5]
+    next_player_mask = state.masks[(state.turn + 1) % n]
 
     if state.trick is None:
         moves = get_legal_moves_free(mask, next_player_mask)
@@ -163,7 +167,8 @@ def advance_turn(state: GameState) -> GameState:
     处理"不能管"的情况：当前玩家无法出牌，turn 移到下家。
     如果转回出牌人 → trick 设为 None，出牌人继续出。
     """
-    next_turn = (state.turn + 1) % 5
+    n = state.num_players
+    next_turn = (state.turn + 1) % n
     if next_turn == state.starter:
         return GameState(state.masks, None, state.starter, state.starter)
     else:
@@ -173,10 +178,10 @@ def advance_turn(state: GameState) -> GameState:
 def check_terminal(state: GameState) -> tuple[int | None, bool]:
     """
     检查终局：有人手牌为空 → 返回 (winner, True)。
-    winner 为第一个手牌为空的玩家索引（0=★, 1~4=对手）。
+    winner 为第一个手牌为空的玩家索引（0=★, 1~N-1=对手）。
     否则返回 (None, False)。
     """
-    for i in range(5):
+    for i in range(state.num_players):
         if state.masks[i] == 0:
             return (i, True)
     return (None, False)

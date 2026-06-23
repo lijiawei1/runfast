@@ -105,7 +105,8 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
 
     # 打印手牌
     star_cards: list[Card] = []
-    for order in range(25):
+    max_bit = state.masks[0].bit_length()
+    for order in range(max_bit):
         if state.masks[0] & (1 << order):
             star_cards.append(Card(order // 4, order % 4))
     print(f"> ★ 手牌：[{', '.join(str(c) for c in star_cards)}]")
@@ -163,7 +164,7 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
 
         # 未找到 ── 检查是否被"下家只剩一张牌"约束过滤
         star_mask = state.masks[0]
-        next_p_mask = state.masks[(state.turn + 1) % 5]
+        next_p_mask = state.masks[(state.turn + 1) % state.num_players]
         constraint_active = (
             next_p_mask.bit_count() == 1
             and len(input_orders) == 1

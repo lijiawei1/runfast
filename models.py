@@ -121,10 +121,15 @@ class Trick:
 @dataclass(frozen=True)
 class GameState:
     """游戏状态（frozen → 可哈希，用于 memoization）"""
-    masks: tuple[int, int, int, int, int]  # 5人手牌 mask（0=★, 1~4=对手）
-    trick: Trick | None                     # 桌上那手牌（None = 自由出牌）
-    turn: int                               # 0~4，当前该谁出
-    starter: int                            # 当前 trick 的发起者（trick=None时设为turn）
+    masks: tuple[int, ...]  # N 人手牌 mask（0=★, 1~N-1=对手），长度 = 玩家数（5~8）
+    trick: Trick | None     # 桌上那手牌（None = 自由出牌）
+    turn: int               # 0~N-1，当前该谁出
+    starter: int            # 当前 trick 的发起者（trick=None时设为turn）
+
+    @property
+    def num_players(self) -> int:
+        """玩家人数（5~8）"""
+        return len(self.masks)
 
 
 # ── 格式化工具 ──
@@ -137,5 +142,6 @@ def format_cards(card_orders: list[int]) -> str:
 
 def _format_hand(mask: int) -> str:
     """将 bitmask 转为可读手牌字符串，如 '♦A, ♣2, ♥3'"""
-    cards = [Card(o // 4, o % 4) for o in range(25) if mask & (1 << o)]
+    max_bit = mask.bit_length()  # 动态适配任意牌数
+    cards = [Card(o // 4, o % 4) for o in range(max_bit) if mask & (1 << o)]
     return ', '.join(str(c) for c in cards)

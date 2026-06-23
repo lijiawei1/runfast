@@ -45,18 +45,20 @@ def find_quads(hand: list[Card]) -> list[tuple[int, int]]:
 
 
 def get_all_cards(mask: int) -> list[int]:
-    """从 bitmask 里提取所有牌的 order 值"""
+    """从 bitmask 里提取所有牌的 order 值（动态适配任意牌数）"""
     result: list[int] = []
-    for order in range(25):
+    max_bit = mask.bit_length()
+    for order in range(max_bit):
         if mask & (1 << order):
             result.append(order)
     return result
 
 
 def _mask_to_cards(mask: int) -> list[Card]:
-    """将 bitmask 转换为 Card 列表"""
+    """将 bitmask 转换为 Card 列表（动态适配任意牌数）"""
     cards: list[Card] = []
-    for order in range(25):
+    max_bit = mask.bit_length()
+    for order in range(max_bit):
         if mask & (1 << order):
             rank = order // 4
             suit = order % 4

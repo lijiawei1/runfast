@@ -137,7 +137,7 @@ def apply_star_move(state: GameState, move: tuple) -> tuple[GameState, str]:
         return state, "首出必须包含 ♦A（order=0），请重新选择。"
 
     # 下家独张约束
-    next_mask = state.masks[(state.turn + 1) % 5]
+    next_mask = state.masks[(state.turn + 1) % state.num_players]
     star_mask = state.masks[0]
     if next_mask.bit_count() == 1 and len(orders) == 1:
         max_order = get_max_single(star_mask)

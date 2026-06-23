@@ -55,13 +55,14 @@ def _dfs_win_seq(state: GameState, depth: int = 0) -> list | None:
     # ── 终局检查 ──
     if state.masks[0] == 0:
         return []  # ★ 手牌为空，★ 赢了（不应在 solve=False 时到达）
-    for i in range(1, 5):
+    for i in range(1, state.num_players):
         if state.masks[i] == 0:
             return []  # 对手先出完，★ 输了 → 路径结束
 
+    n = state.num_players
     player = state.turn
     mask = state.masks[player]
-    next_player_mask = state.masks[(player + 1) % 5]
+    next_player_mask = state.masks[(player + 1) % n]
 
     # 获取合法出牌
     if state.trick is None:
@@ -71,7 +72,7 @@ def _dfs_win_seq(state: GameState, depth: int = 0) -> list | None:
 
     # 无合法出牌 → Pass（不记录到序列中，只推进状态）
     if not moves:
-        next_t = (state.turn + 1) % 5
+        next_t = (state.turn + 1) % n
         if next_t == state.starter:
             ns = GameState(state.masks, None, state.starter, state.starter)
         else:

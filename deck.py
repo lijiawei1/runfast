@@ -4,15 +4,24 @@ import random
 from models import Card
 
 
-def build_deck() -> list[Card]:
-    """构建 25 张牌（5人局，rank 0~6 各花色齐全，rank 7~12 仅 ♦）"""
+def build_deck(num_players: int = 5) -> list[Card]:
+    """构建 num_players×5 张牌（5人=25张, 6人=30张, 7人=35张, 8人=40张）。
+
+    只取 globalOrder 0 ~ (num_players×5 - 1) 的牌。
+    """
+    if num_players not in (5, 6, 7, 8):
+        raise ValueError(f"仅支持5~8人局，收到: {num_players}")
+    total = num_players * 5  # 25/30/35/40
     deck: list[Card] = []
     for rank in range(13):
         for suit in range(4):
-            order = rank * 4 + suit
-            if order > 24:
+            card = Card(rank, suit)
+            if card.order >= total:
                 break
-            deck.append(Card(rank, suit))
+            deck.append(card)
+        else:
+            continue
+        break
     return deck
 
 
@@ -26,15 +35,15 @@ def shuffle_and_deal(deck: list[Card], num_players: int = 5) -> list[list[Card]]
     return hands
 
 
-def hands_to_masks(hands: list[list[Card]]) -> tuple[int, int, int, int, int]:
-    """将5个玩家的手牌各自转为 25-bit mask"""
+def hands_to_masks(hands: list[list[Card]]) -> tuple[int, ...]:
+    """将 N 个玩家的手牌各自转为 bitmask，返回动态长度 tuple"""
     masks: list[int] = []
     for hand in hands:
         m = 0
         for c in hand:
             m |= 1 << c.order
         masks.append(m)
-    return (masks[0], masks[1], masks[2], masks[3], masks[4])
+    return tuple(masks)
 
 
 def find_diamond_a_holder(hands: list[list[Card]]) -> int:
@@ -81,7 +90,7 @@ def take_bid_logic(
     return (bidder, updated)
 
 
-def take_bid(hands: list[list[Card]]) -> tuple[int | None, list[list[Card]]]:
+def take_bid(hands: list[list[Card]], num_players: int = 5) -> tuple[int | None, list[list[Card]]]:
     """
     抢A CLI轮询（交互式）。
 
@@ -99,8 +108,8 @@ def take_bid(hands: list[list[Card]]) -> tuple[int | None, list[list[Card]]]:
 
     # ── 顺时针轮询 ──
     bidder: int | None = None
-    for offset in range(5):
-        player = (original_owner + offset) % 5
+    for offset in range(num_players):
+        player = (original_owner + offset) % num_players
         ans = input(f"玩家{player} 是否抢A？(y/n): ").strip().lower()
         if ans == "y":
             bidder = player

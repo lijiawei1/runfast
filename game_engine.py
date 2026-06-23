@@ -21,7 +21,7 @@ def get_valid_moves_for_player(
         list[Move]: 合法出牌列表
     """
     mask = state.masks[player]
-    next_player_mask = state.masks[(player + 1) % 5]
+    next_player_mask = state.masks[(player + 1) % state.num_players]
 
     if state.trick is None:
         return get_legal_moves_free(mask, next_player_mask)

@@ -55,6 +55,7 @@ inject_styles()
 DEFAULTS = {
     "state": None,
     "mode": 1,
+    "num_players": 5,
     "log": [],
     "current_sequence": [],
     "game_started": False,
@@ -103,9 +104,10 @@ def _reset_game():
 # ══════════════════════════════════════════════════════════════════════
 
 def _deal_only():
-    """随机发牌 → 返回 (hands_5, da_owner)"""
-    deck = build_deck()
-    hands = shuffle_and_deal(deck)
+    """随机发牌 → 返回 (hands, da_owner)"""
+    n = st.session_state.get("num_players", 5)
+    deck = build_deck(n)
+    hands = shuffle_and_deal(deck, n)
 
     da_owner = None
     for i, hand in enumerate(hands):
@@ -134,7 +136,8 @@ def show_bid_selection():
     if config_bidder is not None:
         st.info(f"📋 配置文件中指定抢A玩家：玩家{config_bidder}")
 
-    for i in range(5):
+    n = st.session_state.get("num_players", 5)
+    for i in range(n):
         mask = sum(1 << c.order for c in hands[i])
         label = "★" if config_bidder == i else f"玩家{i}"
         da_badge = ""
@@ -173,13 +176,14 @@ def _finalize_bidder():
     """确认抢A：完成换手、重排、创建 GameState、进入游戏。"""
     hands = st.session_state.bidding_hands
     bidder = st.session_state.bidder_selected
+    n = len(hands)  # 动态玩家数
 
     # 使用 deck.py 纯函数完成换手
     _, updated_hands = take_bid_logic(hands, bidder)
 
     # 重排：★ → 索引 0
     reordered = [updated_hands[bidder]] + [
-        updated_hands[i] for i in range(5) if i != bidder
+        updated_hands[i] for i in range(n) if i != bidder
     ]
     masks = hands_to_masks(reordered)
 
@@ -271,6 +275,20 @@ def render_sidebar():
             on_change=lambda: _on_mode_change(),
             disabled=st.session_state.game_started and st.session_state.state is not None,
         )
+
+        st.divider()
+
+        st.subheader("⚙️ 游戏设置")
+        st.number_input(
+            "玩家人数", min_value=5, max_value=8, value=st.session_state.get("num_players", 5),
+            key="num_players_input",
+            disabled=st.session_state.game_started,
+            on_change=lambda: st.session_state.update(
+                {"num_players": st.session_state.num_players_input}
+            ) if not st.session_state.game_started else None,
+        )
+        if not st.session_state.game_started:
+            st.session_state.num_players = st.session_state.num_players_input
 
         st.divider()
 
@@ -370,7 +388,7 @@ def render_game_state():
 
     # ── 对手手牌区 ──
     st.markdown('<div class="hand-label">👤 对手手牌</div>', unsafe_allow_html=True)
-    for i in range(1, 5):
+    for i in range(1, state.num_players):
         icon = "🏁" if state.masks[i] == 0 else f"P{i}"
         st.markdown(
             f'<div class="hand-label" style="font-weight:400;">{icon} 玩家{i}</div>',

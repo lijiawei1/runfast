@@ -16,11 +16,15 @@ RANK_MAP: dict[str, int] = {
 
 # ── 牌面解析 ──
 
-def parse_card(card_str: str) -> Card:
+def parse_card(card_str: str, max_order: int = 39) -> Card:
     """将字符串 "D A" 或 "h 10"（大小写不敏感）转为 Card 对象。
 
+    Args:
+        card_str: 牌面字符串
+        max_order: 最大允许的 order（默认 39=8人局上限）
+
     Raises:
-        ValueError: 格式错误、花色/牌面无效、order 超出 0~24
+        ValueError: 格式错误、花色/牌面无效、order 超出范围
     """
     parts = card_str.strip().upper().split()
     if len(parts) != 2:
@@ -35,9 +39,9 @@ def parse_card(card_str: str) -> Card:
     suit = SUIT_MAP[suit_char]
     rank = RANK_MAP[rank_char]
     order = rank * 4 + suit
-    if order > 24:
+    if order > max_order:
         raise ValueError(
-            f"牌 '{card_str}' 的 globalOrder={order}，超出范围 0~24"
+            f"牌 '{card_str}' 的 globalOrder={order}，超出范围 0~{max_order}"
         )
     return Card(rank, suit)
 
@@ -152,12 +156,12 @@ def validate_and_parse_scenario(
 
     Returns:
         (bidder, hands, scenario_info)
-        - bidder: ★ 玩家在原顺序中的索引 (0~4)
-        - hands: 5 个玩家的 Card 列表（按 order 排序）
+        - bidder: ★ 玩家在原顺序中的索引 (0~N-1)
+        - hands: N 个玩家的 Card 列表（按 order 排序）
         - scenario_info: {id, name, description}
 
     Raises:
-        ValueError: 手牌数≠25、重复牌、♦A缺失、玩家数≠5、bidder无效等
+        ValueError: 手牌数≠N×5、重复牌、♦A缺失、玩家数无效、bidder无效等
     """
     scenarios = config_data.get("scenarios", [])
     if not scenarios:
@@ -166,13 +170,22 @@ def validate_and_parse_scenario(
     selected = _select_scenario(scenarios, scenario_id)
     name = selected.get("name", "未命名")
 
+    # ── 读取 num_players（默认 5）──
+    num_players = selected.get("num_players", 5)
+    if num_players not in (5, 6, 7, 8):
+        raise ValueError(
+            f"场景'{name}'num_players={num_players} 无效，仅支持 5/6/7/8"
+        )
+    total_cards = num_players * 5
+    max_order = total_cards - 1  # 24/29/34/39
+
     # ── 玩家数量验证 ──
     players_data = selected.get("players", {})
-    if len(players_data) != 5:
+    if len(players_data) != num_players:
         raise ValueError(
-            f"场景'{name}'玩家数不为5（实际: {len(players_data)}）"
+            f"场景'{name}'玩家数不为{num_players}（实际: {len(players_data)}）"
         )
-    for i in range(5):
+    for i in range(num_players):
         if i not in players_data:
             raise ValueError(f"场景'{name}'缺少玩家{i}的手牌")
         cards = players_data[i]
@@ -182,12 +195,12 @@ def validate_and_parse_scenario(
             )
 
     # ── 解析所有手牌 ──
-    hands: list[list[Card]] = [[] for _ in range(5)]
+    hands: list[list[Card]] = [[] for _ in range(num_players)]
     all_orders: list[int] = []
 
-    for i in range(5):
+    for i in range(num_players):
         for cs in players_data[i]:
-            card = parse_card(str(cs))
+            card = parse_card(str(cs), max_order=max_order)
             if card.order in all_orders:
                 raise ValueError(
                     f"场景'{name}'包含重复牌: {cs}（order={card.order}）"
@@ -195,10 +208,10 @@ def validate_and_parse_scenario(
             all_orders.append(card.order)
             hands[i].append(card)
 
-    # 手牌总数 = 25
-    if len(all_orders) != 25:
+    # 手牌总数 = num_players × 5
+    if len(all_orders) != total_cards:
         raise ValueError(
-            f"场景'{name}'手牌总数不为25（实际: {len(all_orders)}）"
+            f"场景'{name}'手牌总数不为{total_cards}（实际: {len(all_orders)}）"
         )
 
     # ── ♦A 存在性检查 ──
@@ -223,9 +236,9 @@ def validate_and_parse_scenario(
                 break
     else:
         bidder = int(raw_bidder)
-        if bidder not in (0, 1, 2, 3, 4):
+        if bidder not in range(num_players):
             raise ValueError(
-                f"场景'{name}'bidder={bidder} 无效，必须为 0~4 或 null"
+                f"场景'{name}'bidder={bidder} 无效，必须为 0~{num_players - 1} 或 null"
             )
 
     # ── 每副手牌按 order 排序 ──
