@@ -15,6 +15,12 @@ from game_engine import (
     first_play_requires_da,
 )
 from sequence import find_best_response
+from log_engine import (
+    to_web_dict,
+    log_star_move,
+    log_opponent_move,
+    log_pass,
+)
 
 from app_render import format_hand_from_mask, render_hand
 
@@ -22,18 +28,6 @@ from app_render import format_hand_from_mask, render_hand
 # ══════════════════════════════════════════════════════════════════════
 # 内部辅助
 # ══════════════════════════════════════════════════════════════════════
-
-def _add_log(player: int, action: str, cards: str, remaining: str, note: str = ""):
-    """添加操作日志（写入 st.session_state）"""
-    st.session_state.log.append({
-        "player": player,
-        "label": "★" if player == 0 else f"玩家{player}",
-        "action": action,
-        "cards": cards,
-        "remaining": remaining,
-        "note": note,
-    })
-
 
 def _record_trick_entry(player_id: int, orders: list[int], type_cn: str):
     """向 trick_history 和 all_trick_history 追加一条出牌记录"""
@@ -88,7 +82,10 @@ def opponent_play(state: GameState) -> tuple[GameState, str]:
     glob = " 🎯全局最大" if gm else ""
     log_str = f"玩家{player} 出 {cards_str}（{type_cn}）{glob}"
 
-    _add_log(player, "出牌", cards_str, remaining, "全局最大接管" if gm else "")
+    entry = log_opponent_move(player, f"[{remaining}]",
+                              f"{cards_str}（{type_cn}）",
+                              global_max=gm, to_web=True)
+    st.session_state.log.append(to_web_dict(entry))
     return ns, log_str
 
 
@@ -117,7 +114,10 @@ def execute_forced_move_web(
     glob = " 🎯全局最大" if gm else ""
     log_str = f"[强制] 玩家{player} 出 {cards_str}（{type_cn}）{glob}"
 
-    _add_log(player, "强制出牌", cards_str, remaining, "全局最大接管" if gm else "")
+    entry = log_opponent_move(player, f"[{remaining}]",
+                              f"{cards_str}（{type_cn}）",
+                              is_forced=True, global_max=gm, to_web=True)
+    st.session_state.log.append(to_web_dict(entry))
     return ns, log_str
 
 
@@ -157,7 +157,9 @@ def apply_star_move(state: GameState, move: tuple) -> tuple[GameState, str]:
         _start_new_round()
 
     remaining = format_hand_from_mask(ns.masks[0])
-    _add_log(0, "出牌", cards_str, remaining, "全局最大接管" if gm else "")
+    entry = log_star_move(f"[{remaining}]", f"{cards_str}（{type_cn}）",
+                          global_max=gm, to_web=True)
+    st.session_state.log.append(to_web_dict(entry))
 
     return ns, ""
 
@@ -267,7 +269,8 @@ def render_star_play(state: GameState):
                 _start_new_round()
             st.session_state.state = ns
             remaining = format_hand_from_mask(ns.masks[0])
-            _add_log(0, "Pass", "—", remaining)
+            entry = log_pass(0, "★", f"[{remaining}]", to_web=True)
+            st.session_state.log.append(to_web_dict(entry))
             process_opponent_chain()
             st.rerun()
         return
@@ -336,7 +339,8 @@ def render_star_play(state: GameState):
             st.session_state.state = ns
             st.session_state.selected_orders = []
             remaining = format_hand_from_mask(ns.masks[0])
-            _add_log(0, "Pass", "—", remaining)
+            entry = log_pass(0, "★", f"[{remaining}]", to_web=True)
+            st.session_state.log.append(to_web_dict(entry))
             process_opponent_chain()
             st.rerun()
 
@@ -376,7 +380,8 @@ def render_mode2_star_play(state: GameState):
             st.session_state.state = ns
             st.session_state.selected_orders = []
             remaining = format_hand_from_mask(ns.masks[0])
-            _add_log(0, "Pass", "—", remaining)
+            entry = log_pass(0, "★", f"[{remaining}]", to_web=True)
+            st.session_state.log.append(to_web_dict(entry))
             process_opponent_chain()
             st.rerun()
         return
@@ -432,7 +437,8 @@ def render_mode2_star_play(state: GameState):
             st.session_state.state = ns
             st.session_state.selected_orders = []
             remaining = format_hand_from_mask(ns.masks[0])
-            _add_log(0, "Pass", "—", remaining)
+            entry = log_pass(0, "★", f"[{remaining}]", to_web=True)
+            st.session_state.log.append(to_web_dict(entry))
             process_opponent_chain()
             st.rerun()
 

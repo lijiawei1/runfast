@@ -12,6 +12,10 @@ from sequence import (
 )
 from cli import play_turn, execute_forced_move
 from config_loader import load_yaml_config, validate_and_parse_scenario
+from log_engine import (
+    log_setup, log_event, log_section, log_star_win, log_star_lose,
+    log_sequence, log_multi_da,
+)
 
 
 def setup_game(num_players: int = 5):
@@ -22,20 +26,22 @@ def setup_game(num_players: int = 5):
     deck = build_deck(num_players)
     hands = shuffle_and_deal(deck, num_players)
 
-    print("=== 发牌完成 ===")
+    lines = ["=== 发牌完成 ==="]
     for i, hand in enumerate(hands):
-        print(f"玩家{i}: {sorted(hand, key=lambda c: c.order)}")
+        lines.append(f"玩家{i}: {sorted(hand, key=lambda c: c.order)}")
+    log_setup(lines)
 
     bidder, updated_hands = take_bid(hands, num_players)
     if bidder is None:
         print("\n无人抢A，退出训练模式")
         return None
 
-    print(f"\n🎯 玩家{bidder} 抢到A！")
-    print("=== 换手后手牌 ===")
+    log_event("🎯", f"玩家{bidder} 抢到A！")
+    lines = ["=== 换手后手牌 ==="]
     for i, hand in enumerate(updated_hands):
         prefix = "★ " if i == bidder else "  "
-        print(f"{prefix}玩家{i}: {sorted(hand, key=lambda c: c.order)}")
+        lines.append(f"{prefix}玩家{i}: {sorted(hand, key=lambda c: c.order)}")
+    log_setup(lines)
 
     # ── 重新排列手牌：★（bidder）移到索引 0 ──
     reordered = [updated_hands[bidder]]
@@ -51,7 +57,7 @@ def setup_game(num_players: int = 5):
         turn=0,
         starter=0,
     )
-    print(f"\n初始状态：turn={state.turn} (★), ★手牌mask={bin(masks[0])}")
+    log_setup([f"初始状态：turn={state.turn} (★), ★手牌mask={bin(masks[0])}"])
 
     return state
 
@@ -71,11 +77,15 @@ def setup_game_from_config(config_path: str, scenario_id: int | None = None) -> 
     num_players = len(hands)  # 从解析后的手牌数获取玩家数
 
     # ── 打印场景信息 ──
-    print(f"\n📌 场景 [{info['id']}] {info['name']}")
-    print(f"   {info['description']}")
-    print("\n=== 预设手牌 ===")
+    lines = [
+        f"📌 场景 [{info['id']}] {info['name']}",
+        f"   {info['description']}",
+        "",
+        "=== 预设手牌 ===",
+    ]
     for i, hand in enumerate(hands):
-        print(f"玩家{i}: {sorted(hand, key=lambda c: c.order)}")
+        lines.append(f"玩家{i}: {sorted(hand, key=lambda c: c.order)}")
+    log_setup(lines)
 
     # ── 确定 bidder 并执行换手 ──
     if bidder is None:
@@ -112,11 +122,12 @@ def setup_game_from_config(config_path: str, scenario_id: int | None = None) -> 
         for hand in updated_hands:
             hand.sort(key=lambda c: c.order)
 
-    print(f"\n🎯 玩家{bidder} 为★（抢A玩家）")
-    print("=== 换手后手牌 ===")
+    log_event("🎯", f"玩家{bidder} 为★（抢A玩家）")
+    lines = ["=== 换手后手牌 ==="]
     for i, hand in enumerate(updated_hands):
         prefix = "★ " if i == bidder else "  "
-        print(f"{prefix}玩家{i}: {sorted(hand, key=lambda c: c.order)}")
+        lines.append(f"{prefix}玩家{i}: {sorted(hand, key=lambda c: c.order)}")
+    log_setup(lines)
 
     # ── 重排：★ 移到索引 0 ──
     reordered = [updated_hands[bidder]]
@@ -131,7 +142,7 @@ def setup_game_from_config(config_path: str, scenario_id: int | None = None) -> 
         turn=0,
         starter=0,
     )
-    print(f"\n初始状态：turn={state.turn} (★), ★手牌mask={bin(masks[0])}")
+    log_setup([f"初始状态：turn={state.turn} (★), ★手牌mask={bin(masks[0])}"])
 
     return state
 
@@ -141,10 +152,11 @@ def mode1_game_loop(state: GameState) -> None:
     while True:
         winner, game_over = check_terminal(state)
         if game_over:
+            log_section("游戏结束", "double")
             if winner == 0:
-                print("\n🎉 ★ 获胜！")
+                log_star_win()
             else:
-                print(f"\n💀 玩家{winner}（对手）先出完，★失败！")
+                log_star_lose(winner)
             break
         state = play_turn(state)
 
@@ -156,33 +168,41 @@ def mode2_game_loop(state: GameState) -> None:
     ★无论怎么出牌，同盟都按最优路径应对。
     """
     # ── 静态分析阶段 ──
-    print("\n📊 静态分析：分析每种含♦A出牌的同盟必胜序列...")
+    log_section("静态分析：多♦A分支验证", "single")
+    log_event("📊", "分析每种含♦A出牌的同盟必胜序列...")
     result_dict = verify_all_da_moves(state)
-    print(format_multi_da_verification(result_dict))
+    da_text = format_multi_da_verification(result_dict)
+    has_star_winning = any(seq is None for seq in result_dict.values())
+    log_multi_da(da_text.split("\n"), has_star_winning=has_star_winning)
 
     # 检查是否有★胜招（任意含♦A出牌同盟无必胜序列）
-    has_star_winning = any(seq is None for seq in result_dict.values())
     if has_star_winning:
-        print("★ 有胜招，退出训练模式二")
+        log_event("★", "有胜招，退出训练模式二")
         return
 
     # 所有含♦A出牌同盟都有必胜序列 → 进入强制执行模式
-    print("\n🚨 进入强制执行模式：同盟将严格按最优路径出牌！")
+    log_event("🚨", "进入强制执行模式：同盟将严格按最优路径出牌！")
 
     # 初始化强制序列（★还未出牌，从初始状态计算同盟最优应对）
     current_sequence: list = find_best_response(state)
     if current_sequence:
-        print("\n📋 初始同盟最优序列：")
-        print(format_best_response(current_sequence))
+        seq_text = format_best_response(current_sequence)
+        lines = []
+        for l in seq_text.split("\n"):
+            l = l.strip()
+            if l:
+                lines.append(("", l, False))
+        log_sequence("初始同盟最优序列", lines)
 
     # ── 动态分析阶段（强制执行）──
     while True:
         winner, game_over = check_terminal(state)
         if game_over:
+            log_section("游戏结束", "double")
             if winner == 0:
-                print("\n🎉 ★ 获胜！")
+                log_star_win()
             else:
-                print(f"\n💀 玩家{winner}（对手）先出完，★失败！")
+                log_star_lose(winner)
             break
 
         if state.turn == 0:
@@ -199,15 +219,21 @@ def mode2_game_loop(state: GameState) -> None:
                 # 全局最大接管，清空序列并重置
                 current_sequence = find_best_response(state)
                 if current_sequence:
-                    print("\n📋 全局最大接管，重新计算同盟最优序列：")
-                    print(format_best_response(current_sequence))
+                    seq_text = format_best_response(current_sequence)
+                    lines = []
+                    for l in seq_text.split("\n"):
+                        l = l.strip()
+                        if l:
+                            lines.append(("", l, False))
+                    log_sequence("全局最大接管，重新计算同盟最优序列", lines)
                 continue
 
             current_sequence = find_best_response(state)
             if current_sequence:
-                print(format_best_response(current_sequence))
+                seq_text = format_best_response(current_sequence)
+                log_setup(seq_text.split("\n"))
             else:
-                print("✅ 此手仍在必胜域内，同盟暂无必胜策略")
+                log_event("✅", "此手仍在必胜域内，同盟暂无必胜策略")
         else:
             # 对手的回合：检查是否有强制出牌
             forced_move = None
@@ -247,9 +273,8 @@ def main(config_path: str | None = None, scene_id: int | None = None,
         return
 
     # ── 模式选择 ──
-    print("\n请选择训练模式：")
-    print("1 - 训练模式一（实时交互）")
-    print("2 - 训练模式二（同盟序列分析）")
+    log_section("训练模式选择", "single")
+    log_setup(["请选择训练模式：", "1 - 训练模式一（实时交互）", "2 - 训练模式二（同盟序列分析）"])
     choice = input("请输入: ").strip()
 
     if choice == "2":
@@ -261,16 +286,9 @@ def main(config_path: str | None = None, scene_id: int | None = None,
 
 def test_best_response():
     """测试 find_best_response：★出牌后，搜索同盟最优应对"""
-    print("=" * 60)
-    print("测试：find_best_response — 同盟最优应对（最恶毒路径）")
-    print("=" * 60)
+    log_section("测试：find_best_response — 同盟最优应对（最恶毒路径）", "double")
 
     # ── 构造场景：★必败状态 ──
-    # ★: ♦A(0), ♦2(4) → 首出♦A后还剩♦2
-    # P1: ♣A(1) → 响应即出完
-    # P2: ♥A(2)
-    # P3: ♠A(3)
-    # P4: ♣2(5)
     masks = (
         (1 << 0) | (1 << 4),  # ★: ♦A + ♦2
         1 << 1,               # P1: ♣A
@@ -282,16 +300,17 @@ def test_best_response():
 
     # 先检查整体局面
     solved = solve(state0)
-    print(f"\n📊 初始局面：turn=0(★), ★手牌={format_cards([0, 4])}")
-    print(f"   solve 结果: {solved} ({'★必胜' if solved else '★必败'})")
+    log_setup([f"📊 初始局面：turn=0(★), ★手牌={format_cards([0, 4])}",
+               f"   solve 结果: {solved} ({'★必胜' if solved else '★必败'})"])
 
     # 搜索整体必胜序列
     seq_full = find_winning_sequence(state0)
     if seq_full:
-        print(f"\n🔍 同盟有必胜序列（find_winning_sequence），共 {len(seq_full)} 步：")
-        print(format_sequence(seq_full))
+        formatted = format_sequence(seq_full)
+        log_setup([f"🔍 同盟有必胜序列（find_winning_sequence），共 {len(seq_full)} 步："] +
+                  formatted.split("\n"))
     else:
-        print("   ★必胜")
+        log_event("★", "必胜")
 
     # ── ★出♦A（order=0）──
     moves = get_legal_moves_free(masks[0])
@@ -302,131 +321,96 @@ def test_best_response():
             break
 
     if move_da is None:
-        print("❌ 错误：找不到 ♦A 出牌")
+        log_event("❌", "错误：找不到 ♦A 出牌")
         return
 
     state1 = _apply_move(state0, move_da, 0)
-    print(f"\n── ★ 打出 ♦A 后 ──")
-    print(f"   新状态：turn={state1.turn}(玩家{state1.turn}), trick={state1.trick}")
-    print(f"   ★ 剩余手牌：{format_cards([4])}  (♦2)")
     solved1 = solve(state1)
-    print(f"   solve 结果: {solved1} ({'★必胜' if solved1 else '★必败'})")
+    log_setup([f"── ★ 打出 ♦A 后 ──",
+               f"   新状态：turn={state1.turn}(玩家{state1.turn}), trick={state1.trick}",
+               f"   ★ 剩余手牌：{format_cards([4])}  (♦2)",
+               f"   solve 结果: {solved1} ({'★必胜' if solved1 else '★必败'})"])
 
     # ★ 出牌后搜索同盟最优应对
-    print(f"\n🔍 find_best_response 结果：")
     resp = find_best_response(state1)
-    print(format_best_response(resp))
+    resp_text = format_best_response(resp)
+    log_setup(["🔍 find_best_response 结果："] + resp_text.split("\n"))
 
-    print("\n" + "=" * 60)
-    print("✅ find_best_response 测试完成")
-    print("=" * 60)
+    log_section("find_best_response 测试完成", "double")
 
 
 def test_multi_da_verification():
-    """测试 enumerate_da_moves, verify_all_da_moves, format_multi_da_verification
+    """测试 enumerate_da_moves, verify_all_da_moves, format_multi_da_verification"""
+    log_section("测试：多♦A出牌分支验证", "double")
 
-    测试场景1：★手牌有多个A，所有含♦A出牌同盟都有必胜序列
-    测试场景2：★有胜招（单张♦A必败，但对子♦A+♣A可破局）
-    """
-    print("=" * 60)
-    print("测试：多♦A出牌分支验证")
-    print("=" * 60)
-
-    # ── 测试场景1：★手牌有多个A ──
-    # ★: ♦A, ♣A, ♥A, ♠A, ♦2 → orders: 0,1,2,3,4
-    # P1: ♣2, ♥2, ♠2 → orders: 5,6,7
-    # P2: ♦3, ♣3, ♥3 → orders: 8,9,10
-    # P3: ♦4, ♣4, ♥4 → orders: 12,13,14
-    # P4: ♦5, ♣5, ♥5 → orders: 16,17,18
-    print("\n--- 测试场景1：★手牌有多个A ---")
+    # ── 测试场景1 ──
+    log_section("场景1：★手牌有多个A", "single")
     star_mask1 = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4)
-    masks1: tuple[int, int, int, int, int] = (
+    masks1 = (
         star_mask1,
-        (1 << 5) | (1 << 6) | (1 << 7),      # P1: ♣2, ♥2, ♠2
-        (1 << 8) | (1 << 9) | (1 << 10),     # P2: ♦3, ♣3, ♥3
-        (1 << 12) | (1 << 13) | (1 << 14),   # P3: ♦4, ♣4, ♥4
-        (1 << 16) | (1 << 17) | (1 << 18),   # P4: ♦5, ♣5, ♥5
+        (1 << 5) | (1 << 6) | (1 << 7),
+        (1 << 8) | (1 << 9) | (1 << 10),
+        (1 << 12) | (1 << 13) | (1 << 14),
+        (1 << 16) | (1 << 17) | (1 << 18),
     )
     state1 = GameState(masks=masks1, trick=None, turn=0, starter=0)
 
-    # 测试 enumerate_da_moves
     da_moves1 = enumerate_da_moves(star_mask1)
-    print(f"  enumerate_da_moves 返回 {len(da_moves1)} 种含♦A出牌：")
+    lines1 = [f"enumerate_da_moves 返回 {len(da_moves1)} 种含♦A出牌："]
     for i, m in enumerate(da_moves1):
-        ttype = m.type
-        type_cn = _TYPE_CN.get(ttype, ttype)
-        cards_str = format_cards(m.orders)
-        print(f"    {i + 1}. {type_cn}: {cards_str}")
+        type_cn = _TYPE_CN.get(m.type, m.type)
+        lines1.append(f"  {i + 1}. {type_cn}: {format_cards(m.orders)}")
+    log_setup(lines1)
 
-    # 测试 verify_all_da_moves
     result1 = verify_all_da_moves(state1)
-    print(f"\n  verify_all_da_moves 结果：")
+    status_lines = ["verify_all_da_moves 结果："]
     all_have_seq = True
     for desc, seq in result1.items():
         status = "同盟必胜 ✅" if seq is not None else "同盟无必胜序列 ❌"
         seq_len = f"({len(seq)}步)" if seq else ""
-        print(f"    {desc} → {status} {seq_len}")
+        status_lines.append(f"  {desc} → {status} {seq_len}")
         if seq is None:
             all_have_seq = False
+    log_setup(status_lines)
+    da_text1 = format_multi_da_verification(result1)
+    log_setup(["format_multi_da_verification 输出："] + da_text1.split("\n"))
+    log_event("📊", f"场景1结论：所有含♦A出牌都有同盟必胜序列 = {all_have_seq}")
 
-    # 打印格式化输出
-    print(f"\n  format_multi_da_verification 输出：")
-    print(format_multi_da_verification(result1))
-
-    # 场景1中，★有4A+♦2但对手有多对子和三条，应该对每种♦A出牌都能应对
-    print(f"  场景1结论：所有含♦A出牌都有同盟必胜序列 = {all_have_seq}")
-
-    # ── 测试场景2：★有胜招 ──
-    # ★: ♦A(0), ♣A(1), ♥2(6) → 可形成单张♦A 和 对子♦A+♣A
-    # 关键设计：对手每人最多1张同rank牌（无对子可形成），确保★对子全局最大
-    # P1: ♠A(3), ♦3(8) → ♠A压制单张♦A，无对子
-    # P2: ♦2(4), ♣4(13) → 无对子
-    # P3: ♣2(5), ♥3(10) → 无对子
-    # P4: ♠2(7), ♠3(11), ♦4(12) → 无对子
-    # ★出单张♦A → P1♠A压制 → 接力链 → P1先出完 → ★败
-    # ★出对子♦A+♣A → 对手均无对子 → 全局最大接管 → ★出♥2获胜
-    print("\n--- 测试场景2：★有胜招（对子可破局）---")
-    star_mask2 = (1 << 0) | (1 << 1) | (1 << 6)  # ♦A(0), ♣A(1), ♥2(6)
-    masks2: tuple[int, int, int, int, int] = (
+    # ── 测试场景2 ──
+    log_section("场景2：★有胜招（对子可破局）", "single")
+    star_mask2 = (1 << 0) | (1 << 1) | (1 << 6)
+    masks2 = (
         star_mask2,
-        (1 << 3) | (1 << 8),                      # P1: ♠A(3), ♦3(8) — 无对子
-        (1 << 4) | (1 << 13),                     # P2: ♦2(4), ♣4(13) — 无对子
-        (1 << 5) | (1 << 10),                     # P3: ♣2(5), ♥3(10) — 无对子
-        (1 << 7) | (1 << 11) | (1 << 12),         # P4: ♠2(7), ♠3(11), ♦4(12) — 无对子
+        (1 << 3) | (1 << 8),
+        (1 << 4) | (1 << 13),
+        (1 << 5) | (1 << 10),
+        (1 << 7) | (1 << 11) | (1 << 12),
     )
     state2 = GameState(masks=masks2, trick=None, turn=0, starter=0)
 
-    # 测试 enumerate_da_moves
     da_moves2 = enumerate_da_moves(star_mask2)
-    print(f"  enumerate_da_moves 返回 {len(da_moves2)} 种含♦A出牌：")
+    lines2 = [f"enumerate_da_moves 返回 {len(da_moves2)} 种含♦A出牌："]
     for i, m in enumerate(da_moves2):
-        ttype = m.type
-        type_cn = _TYPE_CN.get(ttype, ttype)
-        cards_str = format_cards(m.orders)
-        print(f"    {i + 1}. {type_cn}: {cards_str}")
+        type_cn = _TYPE_CN.get(m.type, m.type)
+        lines2.append(f"  {i + 1}. {type_cn}: {format_cards(m.orders)}")
+    log_setup(lines2)
 
-    # 验证 solve 确认状态
     solved2 = solve(state2)
-    print(f"\n  初始状态 solve 结果: {solved2} ({'★必胜' if solved2 else '★必败'})")
+    log_event("📊", f"初始状态 solve 结果: {solved2} ({'★必胜' if solved2 else '★必败'})")
 
-    # 测试 verify_all_da_moves
     result2 = verify_all_da_moves(state2)
     has_star_win = any(seq is None for seq in result2.values())
-    print(f"\n  verify_all_da_moves 结果：")
+    status_lines2 = ["verify_all_da_moves 结果："]
     for desc, seq in result2.items():
         status = "同盟必胜 ✅" if seq is not None else "同盟无必胜序列 ❌"
         seq_len = f"({len(seq)}步)" if seq else ""
-        print(f"    {desc} → {status} {seq_len}")
+        status_lines2.append(f"  {desc} → {status} {seq_len}")
+    log_setup(status_lines2)
+    da_text2 = format_multi_da_verification(result2)
+    log_setup(["format_multi_da_verification 输出："] + da_text2.split("\n"))
+    log_event("📊", f"场景2结论：存在★胜招 = {has_star_win}")
 
-    print(f"\n  format_multi_da_verification 输出：")
-    print(format_multi_da_verification(result2))
-
-    # 预期：对子♦A+♣A 同盟无必胜序列（★有胜招）
-    print(f"  场景2结论：存在★胜招 = {has_star_win}")
-
-    print("\n" + "=" * 60)
-    print("🎉 多♦A出牌分支验证测试完成！")
-    print("=" * 60)
+    log_section("多♦A出牌分支验证测试完成！", "double")
 
 
 if __name__ == "__main__":

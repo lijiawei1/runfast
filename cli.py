@@ -9,6 +9,16 @@ from game_engine import (
     apply_move_with_global_max,
     first_play_requires_da,
 )
+from log_engine import (
+    log_section,
+    log_star_move,
+    log_opponent_move,
+    log_pass,
+    log_analysis,
+    log_moves_list,
+    log_event,
+    log_global_max,
+)
 
 
 def apply_move(state: GameState, move: tuple, player: int) -> GameState:
@@ -42,12 +52,8 @@ def play_turn(state: GameState) -> GameState:
     # 处理无法出牌的情况（Pass）
     if not moves:
         remaining = _format_hand(state.masks[player])
-        if player == 0:
-            print(f"\n😔 ★ 无牌可出，选择不出(Pass)")
-            print(f"★ 剩余手牌: [{remaining}]")
-        else:
-            print(f"\n👤 玩家{player} 选择不出(Pass)")
-            print(f"玩家{player} 剩余手牌: [{remaining}]")
+        label = "★" if player == 0 else f"玩家{player}"
+        log_pass(player, label, f"[{remaining}]")
         return advance_turn(state)
 
     # ★的回合
@@ -97,25 +103,15 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
     # 分析所有出牌
     overall_result, winning_moves_info, losing_moves_info = analyze_moves(state)
 
-    # 打印局面
-    tie_cn = "★必胜" if overall_result else "★必败"
-    emoji = "✅" if overall_result else "❌"
-    print(f"\n当前回合：★")
-    print(f"📊 局面分析：{emoji} {tie_cn}")
-
-    # 打印手牌
+    # ── 局面分析 ──
     star_cards: list[Card] = []
     max_bit = state.masks[0].bit_length()
     for order in range(max_bit):
         if state.masks[0] & (1 << order):
             star_cards.append(Card(order // 4, order % 4))
-    print(f"> ★ 手牌：[{', '.join(str(c) for c in star_cards)}]")
-
-    # 打印桌上
-    if state.trick:
-        print(f"桌上：{state.trick}")
-    else:
-        print("桌上：无（首出）")
+    hand_str = f"[{', '.join(str(c) for c in star_cards)}]"
+    trick_str = str(state.trick) if state.trick else "无（首出）"
+    log_analysis(overall_result, hand_str, trick_str)
 
     # ── 判断是否为首出（trick=None 且 ♦A 仍在手）──
     requires_da = first_play_requires_da(state)
@@ -124,12 +120,14 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
     winning_set = {tuple(sorted(wm[2])) for wm in winning_moves_info}
     losing_set = {tuple(sorted(lm[2])) for lm in losing_moves_info}
 
-    # 列出所有出牌（带 order 标注）
-    print(f"\n> 可选出牌：")
+    # 构建可选出牌列表
     display = _build_moves_display(moves, winning_set, losing_set)
+    move_entries: list[tuple[bool, str, str, str]] = []
     for label, type_cn, cards_str, orders, _ in display:
         order_tag = ", ".join(str(o) for o in orders)
-        print(f"  {label} {type_cn}: {cards_str}  [{order_tag}]")
+        is_win = label == "✅"
+        move_entries.append((is_win, type_cn, cards_str, order_tag))
+    log_moves_list(move_entries)
 
     # 玩家输入循环
     while True:
@@ -155,11 +153,10 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
         for label, type_cn, cards_str, orders, move in display:
             if set(orders) == input_set:
                 ns = apply_move_with_global_max(state, move, 0)
-                print(f"★ 出: {cards_str} ({type_cn})")
-                if is_global_max(move, state.masks):
-                    print("🎯 全局最大！直接继续出牌")
+                gm = is_global_max(move, state.masks)
                 remaining = _format_hand(ns.masks[0])
-                print(f"★ 剩余手牌: [{remaining}]")
+                log_star_move(f"[{remaining}]", f"{cards_str}（{type_cn}）",
+                              global_max=gm)
                 return ns
 
         # 未找到 ── 检查是否被"下家只剩一张牌"约束过滤
@@ -188,9 +185,8 @@ def _play_opponent_turn(state: GameState, player: int) -> GameState:
     """对手回合：选最恶毒的出牌（让★输的move）"""
     best_move = get_opponent_best_move(state, player)
     if best_move is None:
-        print(f"\n👤 玩家{player} 无牌可出，选择不出(Pass)")
         remaining = _format_hand(state.masks[player])
-        print(f"玩家{player} 剩余手牌: [{remaining}]")
+        log_pass(player, f"玩家{player}", f"[{remaining}]")
         return advance_turn(state)
 
     ttype = best_move.type
@@ -199,11 +195,10 @@ def _play_opponent_turn(state: GameState, player: int) -> GameState:
     cards_str = format_cards(orders)
 
     ns = apply_move_with_global_max(state, best_move, player)
-    print(f"\n👤 玩家{player} 出: {cards_str} ({type_cn})")
-    if is_global_max(best_move, state.masks):
-        print("🎯 全局最大！直接继续出牌")
+    gm = is_global_max(best_move, state.masks)
     remaining = _format_hand(ns.masks[player])
-    print(f"玩家{player} 剩余手牌: [{remaining}]")
+    log_opponent_move(player, f"[{remaining}]", f"{cards_str}（{type_cn}）",
+                      global_max=gm)
 
     return ns
 
@@ -237,12 +232,9 @@ def execute_forced_move(state: GameState, forced_move: tuple) -> GameState:
 
     # 应用出牌（含全局最大接管）
     ns = apply_move_with_global_max(state, forced_move, player)
-
-    print(f"\n🤖 [强制] 玩家{player} 出: {cards_str} ({type_cn})")
-    if is_global_max(forced_move, state.masks):
-        print("🎯 全局最大！直接继续出牌")
-
+    gm = is_global_max(forced_move, state.masks)
     remaining = _format_hand(ns.masks[player])
-    print(f"玩家{player} 剩余手牌: [{remaining}]")
+    log_opponent_move(player, f"[{remaining}]", f"{cards_str}（{type_cn}）",
+                      is_forced=True, global_max=gm)
 
     return ns

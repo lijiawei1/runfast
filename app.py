@@ -20,6 +20,7 @@ from sequence import (
     find_best_response, format_best_response,
 )
 from config_loader import load_yaml_config, validate_and_parse_scenario
+from log_engine import to_web_dict, log_event
 
 from app_styles import inject_styles
 from app_render import (
@@ -79,19 +80,6 @@ for key, val in DEFAULTS.items():
 # ══════════════════════════════════════════════════════════════════════
 # 工具函数
 # ══════════════════════════════════════════════════════════════════════
-
-def _add_log(player: int, action: str, cards: str,
-             remaining: str, note: str = ""):
-    """添加操作日志"""
-    st.session_state.log.append({
-        "player": player,
-        "label": "★" if player == 0 else f"玩家{player}",
-        "action": action,
-        "cards": cards,
-        "remaining": remaining,
-        "note": note,
-    })
-
 
 def _reset_game():
     """重置游戏状态"""
@@ -194,7 +182,8 @@ def _finalize_bidder():
     st.session_state.trick_history = []
     st.session_state.all_trick_history = []
     st.session_state.current_round = 1
-    _add_log(-1, "游戏开始", "", "", f"★=原玩家{bidder}")
+    entry = log_event("🚀", f"游戏开始 ★=原玩家{bidder}", to_web=True)
+    st.session_state.log.append(to_web_dict(entry))
 
     # 模式二：静态分析
     if st.session_state.mode == 2:
@@ -427,20 +416,37 @@ def render_log():
             st.caption("暂无操作记录")
             return
         for entry in st.session_state.log:
-            if entry["player"] == -1:
-                st.write("--- 🚀 游戏开始 ---")
-            elif entry["action"] == "出牌":
+            etype = entry.get("type", "")
+            if etype == "event":
+                st.write(f"--- {entry.get('emoji', '')} {entry.get('message', '')} ---")
+            elif etype == "move":
+                prefix = "🤖 " if entry.get("is_forced") else ""
+                note = f" {entry.get('note', '')}" if entry.get("note") else ""
                 st.write(
-                    f"{entry['label']} 出: {entry['cards']} "
-                    f"→ 剩余 [{entry['remaining']}] {entry['note']}"
+                    f"{prefix}{entry['label']} 出: {entry['cards']} "
+                    f"→ 剩余 {entry['remaining']}{note}"
                 )
-            elif entry["action"] == "强制出牌":
-                st.write(
-                    f"🤖 {entry['label']} [强制] 出: {entry['cards']} "
-                    f"→ 剩余 [{entry['remaining']}] {entry['note']}"
-                )
-            elif entry["action"] == "Pass":
-                st.write(f"{entry['label']} Pass → 剩余 [{entry['remaining']}]")
+            elif etype == "pass":
+                st.write(f"{entry['label']} Pass → 剩余 {entry['remaining']}")
+            elif etype == "setup":
+                pass  # setup 信息在游戏主界面展示
+            else:
+                # 兼容旧格式或未知类型
+                player = entry.get("player", -2)
+                if player == -1:
+                    st.write("--- 🚀 游戏开始 ---")
+                elif entry.get("action") == "出牌":
+                    st.write(
+                        f"{entry['label']} 出: {entry['cards']} "
+                        f"→ 剩余 [{entry['remaining']}] {entry.get('note', '')}"
+                    )
+                elif entry.get("action") == "强制出牌":
+                    st.write(
+                        f"🤖 {entry['label']} [强制] 出: {entry['cards']} "
+                        f"→ 剩余 [{entry['remaining']}] {entry.get('note', '')}"
+                    )
+                elif entry.get("action") == "Pass":
+                    st.write(f"{entry['label']} Pass → 剩余 [{entry['remaining']}]")
 
 
 def render_interaction():
