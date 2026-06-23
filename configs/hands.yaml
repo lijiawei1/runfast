@@ -1,0 +1,41 @@
+meta:
+  name: "夺A快跑测试场景集"
+  author: "tester"
+  created: "2026-06-22"
+
+scenarios:
+  - id: 1
+    name: "★手牌极好测试"
+    description: "★有♦A+同花顺(D)，对手各持同花色，★大概率获胜"
+    num_players: 5
+    bidder: null
+    players:
+      0: ["D A", "D 2", "D 3", "D 4", "D 5"]
+      1: ["S A", "S 2", "S 3", "S 4", "S 5"]
+      2: ["C A", "C 2", "C 3", "C 4", "C 5"]
+      3: ["H A", "H 2", "H 3", "H 4", "H 5"]
+      4: ["D 6", "C 6", "H 6", "S 6", "D 7"]
+
+  - id: 2
+    name: "★必败测试"
+    description: "★手牌差（D A + 杂牌），同盟有强压制组合"
+    num_players: 5
+    bidder: 0
+    players:
+      0: ["D A", "H 2", "C 3", "H 3", "D 7"]
+      1: ["S A", "C A", "H A", "D 2", "C 2"]
+      2: ["S 2", "S 3", "C 4", "D 5", "S 6"]
+      3: ["C 5", "H 6", "H 4", "S 4", "C 6"]
+      4: ["D 3", "D 4", "S 5", "H 5", "D 6"]
+
+  - id: 3
+    name: "★手牌极好复盘"
+    description: "★有♦A+同花顺(D)，对手各持同花色，★大概率获胜"
+    num_players: 5
+    bidder: null
+    players:
+      0: ["D A", "D 2", "D 3", "D 4", "D 5"]
+      1: ["S A", "S 2", "S 3", "S 4", "S 5"]
+      2: ["C A", "C 2", "C 3", "C 4", "C 5"]
+      3: ["H A", "H 2", "H 3", "H 4", "H 5"]
+      4: ["D 6", "C 6", "H 6", "S 6", "D 7"]
