@@ -1,5 +1,5 @@
-# 夺A快跑 - SPEC（v0.10）
-*更新日期：2026-06-23*
+# 夺A快跑 - SPEC（v0.11）
+*更新日期：2026-06-23（R6 模块化拆分后刷新）*
 
 ---
 
@@ -257,17 +257,23 @@ python main.py
 ---
 
 ## 文件结构
-- `models.py` — 数据模型（Card/Trick/GameState）、常量（_TYPE_CN/牌型层级）、格式化工具
-- `deck.py` — 牌组构建、洗牌发牌、抢A换手、mask初始化
+- `models.py` — 数据模型（Card/Trick/GameState/**Move**）、常量（_TYPE_CN/牌型层级）、格式化工具
+- `deck.py` — 牌组构建、洗牌发牌、抢A换手（纯逻辑 `take_bid_logic()` + CLI `take_bid()` 分离）
 - `moves.py` — 牌型识别（get_counts）、合法出牌枚举（get_legal_moves_free / get_legal_moves_follow）、全局最大判定（is_global_max）、含♦A出牌枚举（enumerate_da_moves）
 - `solver.py` — 求解器（solve / analyze_moves）、局面推进（_apply_move / advance_turn / check_terminal）
 - `sequence.py` — 同盟序列分析（find_winning_sequence / find_best_response / verify_all_da_moves 及对应format函数）
-- `cli.py` — CLI交互（play_turn）、强制执行（execute_forced_move）、对手AI出牌
-- `config_loader.py` — YAML配置文件加载、手牌验证（重复牌/牌数/♦A存在性）、Card解析与场景选择
+- `game_engine.py` — **纯规则引擎**（get_valid_moves_for_player / get_opponent_best_move / apply_move_with_global_max / first_play_requires_da），CLI/Web 共用
+- `cli.py` — CLI 交互（play_turn）、强制执行（execute_forced_move）、对手AI出牌（通过 game_engine）
+- `config_loader.py` — YAML 配置文件加载、手牌验证（重复牌/牌数/♦A存在性）、Card 解析与场景选择
 - `configs/hands.yaml` — 示例预设手牌场景集（2个场景：★极好/★必败）
+- `app.py` — Streamlit Web 应用入口（编排层，~468行）
+- `app_styles.py` — Web UI CSS 样式注入
+- `app_render.py` — Web UI 牌面 HTML 渲染、历史出牌格式化
+- `app_play.py` — Web UI ★出牌交互、对手回合处理、出牌链
 - `game.py` — 向后兼容的聚合导出入口
-- `main.py` — 演示入口（训练模式一/二；命令行参数：`--load`、`--scene`、`--test-best-response`、`--test-multi-da`）
-- `test_game.py` — 单元测试（牌型识别、枚举器、求解器、抢A、牌权传递、Pass、下家约束、全局最大、同盟序列、边界条件）
+- `main.py` — CLI 入口（训练模式一/二；命令行参数：`--load`、`--scene`、`--test-best-response`、`--test-multi-da`、`--web`）
+- `tests/` — 测试目录（conftest + test_solver/test_cli/test_sequence/test_config_loader，共6文件）
+- `test_game.py` — 旧测试（向后兼容，41个测试）
 
 ---
 
@@ -309,7 +315,8 @@ python main.py
 ---
 
 ## 编码规则
-- 测试代码放在`test_game.py`中
+- 测试代码放在 `tests/` 目录下（旧测试保留在 `test_game.py` 向后兼容）
+- 新功能开发顺序：CLI验证 → 单元测试 → UI对接（见 CLAUDE.md）
 
 ## 版本变更记录
 
@@ -322,3 +329,4 @@ python main.py
 | v0.8 | 模块化拆分：game.py → models / deck / moves / solver / sequence / cli，game.py 改为聚合导出入口 |
 | v0.9 | 新增预设手牌场景加载：config_loader.py（YAML解析+验证+手牌转换）、configs/hands.yaml、main.py 新增 --load/--scene 参数 |
 | v0.10 | UI 重构（app.py）：① 手牌区卡片固定大小（3.2×4.8rem居中），不再横向拉伸；② 「本轮出牌」→「历史出牌」，跨轮保留全部出牌记录，按轮次分组可滚动；③ ★ 出牌控件（出牌/清空/Pass）移至「历史出牌」下方、手牌上方，去除「训练模式一/二」子标题；④ 对手回合控件独立显示，不与★控件混排 |
+| v0.11 | **R6 模块化拆分**：① app.py 1560→468行，拆分为 app_styles/app_render/app_play/game_engine 四个模块；② Move 类替代 tuple，cli.py/sequence.py 迁移；③ game_engine.py 统一 CLI/Web 规则逻辑；④ 新增 tests/ 目录（6文件，116测试）；⑤ deck.take_bid_logic() 纯函数分离；⑥ 修复 SOLVER_MISS 导致的求解器逻辑错误 |

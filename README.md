@@ -23,49 +23,50 @@
 # 进入训练（选择模式一或二）
 python main.py
 
-# 运行测试
-python -m pytest test_game.py -v
-
-# 专项测试
-python main.py --test-best-response
-python main.py --test-multi-da
+# 运行全量测试（116个测试）
+python -m pytest tests/ test_game.py -v
 
 # 加载配置文件
 python main.py --load configs/hands.yaml          # 交互选场景
 python main.py --load configs/hands.yaml --scene 1 # 直接指定场景
-python main.py                                      # 随机发牌（不变）
 
 # Web 界面
-python main.py --web
-
-# 或直接
 streamlit run app.py
 
-# CLI 模式（不受影响）
-python main.py                           # 随机发牌
-python main.py --load configs/hands.yaml # 加载预设场景
-
-
-
+# 或通过 main.py 启动 Web
+python main.py --web
 ```
 
 ## 项目结构
 
 ```
 runfirst/
-├── models.py         # 数据模型、常量、格式化
-├── deck.py           # 牌组构建、发牌、抢A
-├── moves.py          # 牌型识别、合法出牌枚举、全局最大判定
-├── solver.py         # 求解器（DFS + memo）、局面推进、终局判定
-├── sequence.py       # 同盟必胜序列分析（多♦A分支验证、最优应对）
-├── cli.py            # CLI 交互、对手AI出牌、强制执行
-├── config_loader.py  # YAML 配置加载、手牌验证与解析
-├── configs/          # 预设手牌场景（YAML）
-│   └── hands.yaml    #   示例场景集
-├── game.py           # 聚合导出（向后兼容）
-├── main.py           # 入口：模式选择 + 命令行参数
-├── test_game.py      # 单元测试
-└── SPEC.md           # 详细规格文档
+├── models.py          # 数据模型（Card/Trick/GameState/Move）、常量、格式化
+├── deck.py            # 牌组构建、发牌、抢A（纯逻辑 + CLI交互分离）
+├── moves.py           # 牌型识别、合法出牌枚举、全局最大判定
+├── solver.py          # 求解器（DFS + memo）、局面推进、终局判定
+├── sequence.py        # 同盟必胜序列分析（多♦A分支验证、最优应对）
+├── game_engine.py     # 纯规则引擎（无UI依赖，CLI/Web 共用）
+├── cli.py             # CLI 交互、对手AI出牌、强制执行
+├── config_loader.py   # YAML 配置加载、手牌验证与解析
+├── configs/           # 预设手牌场景（YAML）
+│   └── hands.yaml
+├── app.py             # Streamlit Web 应用入口（编排层）
+├── app_styles.py      # Web UI CSS 样式注入
+├── app_render.py      # Web UI 牌面/历史渲染
+├── app_play.py        # Web UI 出牌交互组件
+├── game.py            # 聚合导出（向后兼容）
+├── main.py            # CLI 入口：模式选择 + 命令行参数
+├── tests/             # 测试目录（6文件，116个测试）
+│   ├── conftest.py
+│   ├── test_solver.py
+│   ├── test_cli.py
+│   ├── test_sequence.py
+│   └── test_config_loader.py
+├── test_game.py       # 旧测试（向后兼容，41个测试）
+├── ARCHITECTURE.md    # 架构现状文档
+├── SPEC.md            # 详细规格文档
+└── CLAUDE.md          # 开发顺序约定
 ```
 
 ## 命令行参数
@@ -77,6 +78,7 @@ runfirst/
 | `--scene ID` | 配合 `--load` 直接指定场景ID（跳过交互选择） |
 | `--test-best-response` | 测试同盟最优应对序列搜索 |
 | `--test-multi-da` | 测试多♦A出牌分支验证 |
+| `--web` | 启动 Streamlit Web 界面 |
 
 ## 许可证
 
