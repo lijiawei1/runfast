@@ -1,27 +1,24 @@
 """夺A快跑 — 核心求解器与局面分析"""
 
 from functools import lru_cache
-from models import GameState, Trick, _TYPE_CN, format_cards
-from moves import get_legal_moves_free, get_legal_moves_response, is_global_max
+from models import GameState, Trick, Move, _TYPE_CN, format_cards
+from moves import get_legal_moves_free, get_legal_moves_response, is_global_max, _ensure_move
 
 
 def _apply_move(
-    state: GameState, move: tuple, player: int
+    state: GameState, move: Move | tuple, player: int
 ) -> GameState:
     """
     应用一手出牌，返回新 GameState。
 
-    move 兼容两种格式:
+    move 兼容 Move 对象和原始 tuple：
       - 自由出牌: (new_mask, trick_type_str, rank, top_suit, [orders])  (5 元组)
       - 接力压制: (new_mask, trick_obj, [orders])                       (3 元组)
     """
+    move = _ensure_move(move)
     masks = list(state.masks)
-
-    if len(move) == 5:
-        new_mask, ttype, rank, top_suit, _orders = move
-        new_trick = Trick(ttype, rank, top_suit)
-    else:
-        new_mask, new_trick, _orders = move
+    new_mask = move.new_mask
+    new_trick = move.trick if move.trick is not None else Trick(move.type, move.rank, move.top_suit)
 
     masks[player] = new_mask
     next_turn = (state.turn + 1) % 5
@@ -33,7 +30,7 @@ def _apply_move(
     return GameState(tuple(masks), new_trick, next_turn, starter)
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=500000)
 def solve(state: GameState) -> bool:
     """
     memoized DFS 求解器：判断 ★（玩家0）从当前状态是否必胜。
@@ -137,12 +134,9 @@ def analyze_moves(state: GameState) -> tuple[bool | None, list, list]:
         ns = _apply_move(state, move, 0)
         result = solve(ns)
 
-        # 提取 move 信息
-        if len(move) == 5:
-            _nm, ttype, _rank, _ts, orders = move
-        else:
-            _nm, trick_obj, orders = move
-            ttype = trick_obj.type
+        # 提取 move 信息（Move 对象统一通过属性访问）
+        ttype = move.type
+        orders = move.orders
 
         type_cn = _TYPE_CN.get(ttype, ttype)
         cards_str = format_cards(orders)

@@ -1,11 +1,6 @@
 """夺A快跑 — 数据模型与常量"""
 
-import sys
 from dataclasses import dataclass
-
-# ── Windows 控制台 UTF-8 编码 ──
-if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding="utf-8")
 
 # ── 常量 ──
 
@@ -17,6 +12,80 @@ RANK_NAMES: dict[int, str] = {
 SUIT_NAMES: dict[int, str] = {0: "♦", 1: "♣", 2: "♥", 3: "♠"}
 
 _TYPE_CN = {"single": "单张", "pair": "对子", "triple": "三条", "quad": "四条"}
+
+
+# ── 统一的出牌表示 ──
+
+
+class Move(tuple):
+    """统一出牌表示，同时支持 tuple 索引和命名属性访问。
+
+    内部为 tuple 子类：
+      - 自由出牌 (5-tuple): (new_mask, type_str, rank, top_suit, orders)
+      - 接力压制 (3-tuple): (new_mask, trick_obj, orders)
+
+    通过命名属性 .type / .new_mask / .rank / .top_suit / .orders / .trick
+    统一访问，无需 len(move) 分支判断格式。
+    """
+
+    @staticmethod
+    def from_free(
+        new_mask: int, ttype: str, rank: int, top_suit: int, orders: list[int]
+    ) -> "Move":
+        """从自由出牌参数构造 Move (5-tuple)"""
+        return Move((new_mask, ttype, rank, top_suit, orders))
+
+    @staticmethod
+    def from_response(
+        new_mask: int, trick: "Trick", orders: list[int]
+    ) -> "Move":
+        """从接力压制参数构造 Move (3-tuple)"""
+        return Move((new_mask, trick, orders))
+
+    @property
+    def type(self) -> str:
+        """牌型："single"/"pair"/"triple"/"quad" """
+        if len(self) == 5:
+            return self[1]
+        else:
+            return self[1].type
+
+    @property
+    def new_mask(self) -> int:
+        """出牌后该玩家的新手牌 mask"""
+        return self[0]
+
+    @property
+    def rank(self) -> int:
+        """牌型对应的 rank (0=A, 1=2, ..., 12=K)"""
+        if len(self) == 5:
+            return self[2]
+        else:
+            return self[1].rank
+
+    @property
+    def top_suit(self) -> int:
+        """最高花色 (0=♦, 1=♣, 2=♥, 3=♠)"""
+        if len(self) == 5:
+            return self[3]
+        else:
+            return self[1].top_suit
+
+    @property
+    def orders(self) -> list[int]:
+        """涉及的 card order 列表"""
+        if len(self) == 5:
+            return self[4]
+        else:
+            return self[2]
+
+    @property
+    def trick(self) -> "Trick | None":
+        """接力压制时的 Trick 对象；自由出牌时为 None"""
+        if len(self) == 5:
+            return None
+        else:
+            return self[1]
 
 
 # ── 数据模型 ──

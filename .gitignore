@@ -24,3 +24,6 @@ Thumbs.db
 # 临时文件
 *.log
 *.tmp
+
+# prompt目录
+.prompt/

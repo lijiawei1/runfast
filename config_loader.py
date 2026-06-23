@@ -79,20 +79,35 @@ def load_yaml_config(path: str) -> dict:
 
 # ── 场景选择 ──
 
-def _select_scenario(scenarios: list[dict], scenario_id: int | None) -> dict:
-    """从场景列表中选取一个场景。
+def select_scenario_logic(scenarios: list[dict], scenario_id: int) -> dict:
+    """纯逻辑：按 scenario_id 直接定位场景。
 
-    - scenario_id 非 None → 直接按 ID 定位
-    - scenario_id 为 None → 交互式选择
+    Args:
+        scenarios: 场景列表
+        scenario_id: 场景 ID
+
+    Returns:
+        匹配的场景 dict
+
+    Raises:
+        ValueError: 场景不存在
     """
-    if scenario_id is not None:
-        for s in scenarios:
-            if s.get("id") == scenario_id:
-                return s
-        ids = [s.get("id") for s in scenarios]
-        raise ValueError(f"场景 {scenario_id} 不存在，可用场景: {ids}")
+    for s in scenarios:
+        if s.get("id") == scenario_id:
+            return s
+    ids = [s.get("id") for s in scenarios]
+    raise ValueError(f"场景 {scenario_id} 不存在，可用场景: {ids}")
 
-    # 交互式选择
+
+def select_scenario_cli(scenarios: list[dict]) -> dict:
+    """CLI 交互式场景选择（含 print/input）。
+
+    Args:
+        scenarios: 场景列表
+
+    Returns:
+        用户选择的场景 dict
+    """
     print(f"\n📋 配置文件中共 {len(scenarios)} 个场景：")
     for s in scenarios:
         sid = s.get("id", "?")
@@ -111,6 +126,17 @@ def _select_scenario(scenarios: list[dict], scenario_id: int | None) -> dict:
             if s.get("id") == sid:
                 return s
         print(f"❌ 场景 {sid} 不存在")
+
+
+def _select_scenario(scenarios: list[dict], scenario_id: int | None) -> dict:
+    """从场景列表中选取一个场景（向后兼容包装器）。
+
+    - scenario_id 非 None → 调用 select_scenario_logic
+    - scenario_id 为 None → 调用 select_scenario_cli
+    """
+    if scenario_id is not None:
+        return select_scenario_logic(scenarios, scenario_id)
+    return select_scenario_cli(scenarios)
 
 
 # ── 场景验证与解析 ──

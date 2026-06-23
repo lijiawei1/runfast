@@ -11,7 +11,7 @@
 
 # ── 模型与常量 ──
 from models import (
-    Card, Trick, GameState,
+    Card, Trick, GameState, Move,
     RANK_NAMES, SUIT_NAMES, _TYPE_CN,
     format_cards, _format_hand,
 )
@@ -19,7 +19,7 @@ from models import (
 # ── 牌组与抢A ──
 from deck import (
     build_deck, shuffle_and_deal,
-    hands_to_masks, find_diamond_a_holder, take_bid,
+    hands_to_masks, find_diamond_a_holder, take_bid, take_bid_logic,
 )
 
 # ── 牌型识别 ──

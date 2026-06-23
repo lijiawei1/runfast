@@ -1,8 +1,14 @@
-"""夺A快跑 — CLI 交互层与强制执行机制"""
+"""夺A快跑 — CLI 交互层与强制执行机制（纯 IO 层）"""
 
 from models import Card, GameState, Trick, _TYPE_CN, format_cards, _format_hand
-from moves import get_legal_moves_free, get_legal_moves_response, is_global_max, get_max_single
-from solver import solve, _apply_move, analyze_moves, advance_turn
+from moves import get_max_single, is_global_max
+from solver import _apply_move, analyze_moves, advance_turn
+from game_engine import (
+    get_valid_moves_for_player,
+    get_opponent_best_move,
+    apply_move_with_global_max,
+    first_play_requires_da,
+)
 
 
 def apply_move(state: GameState, move: tuple, player: int) -> GameState:
@@ -29,18 +35,13 @@ def play_turn(state: GameState) -> GameState:
         - 打印对手出牌，应用并返回
     """
     player = state.turn
-    mask = state.masks[player]
-    next_player_mask = state.masks[(player + 1) % 5]
 
     # 获取合法出牌
-    if state.trick is None:
-        moves = get_legal_moves_free(mask, next_player_mask)
-    else:
-        moves = get_legal_moves_response(mask, state.trick, next_player_mask)
+    moves = get_valid_moves_for_player(state, player)
 
     # 处理无法出牌的情况（Pass）
     if not moves:
-        remaining = _format_hand(mask)
+        remaining = _format_hand(state.masks[player])
         if player == 0:
             print(f"\n😔 ★ 无牌可出，选择不出(Pass)")
             print(f"★ 剩余手牌: [{remaining}]")
@@ -53,7 +54,7 @@ def play_turn(state: GameState) -> GameState:
     if player == 0:
         return _play_star_turn(state, moves)
     else:
-        return _play_opponent_turn(state, moves, player)
+        return _play_opponent_turn(state, player)
 
 
 # ── ★ 回合交互 ──
@@ -72,11 +73,8 @@ def _build_moves_display(
     display: list[tuple[str, str, str, list[int], tuple]] = []
 
     for move in moves:
-        if len(move) == 5:
-            _nm, ttype, _rank, _ts, orders = move
-        else:
-            _nm, trick_obj, orders = move
-            ttype = trick_obj.type
+        ttype = move.type
+        orders = move.orders
 
         type_cn = _TYPE_CN.get(ttype, ttype)
         cards_str = format_cards(orders)
@@ -119,10 +117,7 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
         print("桌上：无（首出）")
 
     # ── 判断是否为首出（trick=None 且 ♦A 仍在手）──
-    first_play_requires_da = (
-        state.trick is None
-        and (state.masks[0] & 1) != 0  # ♦A (order=0) 还在手
-    )
+    requires_da = first_play_requires_da(state)
 
     # 构建胜/败集合（复用 analyze_moves 结果，避免重复 solve）
     winning_set = {tuple(sorted(wm[2])) for wm in winning_moves_info}
@@ -150,7 +145,7 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
             continue
 
         # ── 首出 ♦A 验证 ──
-        if first_play_requires_da and 0 not in input_orders:
+        if requires_da and 0 not in input_orders:
             print("❌ 首出必须包含 ♦A（order=0），请重新选择。")
             continue
 
@@ -158,10 +153,9 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
         input_set = set(input_orders)
         for label, type_cn, cards_str, orders, move in display:
             if set(orders) == input_set:
-                ns = _apply_move(state, move, 0)
+                ns = apply_move_with_global_max(state, move, 0)
                 print(f"★ 出: {cards_str} ({type_cn})")
                 if is_global_max(move, state.masks):
-                    ns = GameState(ns.masks, None, 0, 0)  # 清空 trick，重新自由出牌
                     print("🎯 全局最大！直接继续出牌")
                 remaining = _format_hand(ns.masks[0])
                 print(f"★ 剩余手牌: [{remaining}]")
@@ -189,37 +183,23 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
 # ── 对手回合 ──
 
 
-def _play_opponent_turn(
-    state: GameState, moves: list, player: int
-) -> GameState:
+def _play_opponent_turn(state: GameState, player: int) -> GameState:
     """对手回合：选最恶毒的出牌（让★输的move）"""
-    # 分析每种出牌，优先选让★输的
-    best_move = None
-    for move in moves:
-        ns = _apply_move(state, move, player)
-        result = solve(ns)
-        if not result:  # ★输的move
-            best_move = move
-            break
-
-    # 如果所有move都让★赢，选第一个
+    best_move = get_opponent_best_move(state, player)
     if best_move is None:
-        best_move = moves[0]
+        print(f"\n👤 玩家{player} 无牌可出，选择不出(Pass)")
+        remaining = _format_hand(state.masks[player])
+        print(f"玩家{player} 剩余手牌: [{remaining}]")
+        return advance_turn(state)
 
-    # 格式化并打印
-    if len(best_move) == 5:
-        _nm, ttype, _rank, _ts, orders = best_move
-    else:
-        _nm, _trick_obj, orders = best_move
-        ttype = _trick_obj.type
-
+    ttype = best_move.type
+    orders = best_move.orders
     type_cn = _TYPE_CN.get(ttype, ttype)
     cards_str = format_cards(orders)
 
-    ns = _apply_move(state, best_move, player)
+    ns = apply_move_with_global_max(state, best_move, player)
     print(f"\n👤 玩家{player} 出: {cards_str} ({type_cn})")
     if is_global_max(best_move, state.masks):
-        ns = GameState(ns.masks, None, player, player)  # 清空 trick，重新自由出牌
         print("🎯 全局最大！直接继续出牌")
     remaining = _format_hand(ns.masks[player])
     print(f"玩家{player} 剩余手牌: [{remaining}]")
@@ -248,26 +228,18 @@ def execute_forced_move(state: GameState, forced_move: tuple) -> GameState:
     """
     player = state.turn
 
-    # 提取 move 信息用于打印
-    if len(forced_move) == 5:
-        _nm, ttype, _rank, _ts, orders = forced_move
-    else:
-        _nm, trick_obj, orders = forced_move
-        ttype = trick_obj.type
-
+    # 提取 move 信息用于打印（Move 对象统一通过属性访问）
+    ttype = forced_move.type
+    orders = forced_move.orders
     type_cn = _TYPE_CN.get(ttype, ttype)
     cards_str = format_cards(orders)
 
-    # 应用出牌
-    ns = _apply_move(state, forced_move, player)
+    # 应用出牌（含全局最大接管）
+    ns = apply_move_with_global_max(state, forced_move, player)
 
-    # 处理全局最大接管
+    print(f"\n🤖 [强制] 玩家{player} 出: {cards_str} ({type_cn})")
     if is_global_max(forced_move, state.masks):
-        ns = GameState(ns.masks, None, player, player)
-        print(f"\n🤖 [强制] 玩家{player} 出: {cards_str} ({type_cn})")
         print("🎯 全局最大！直接继续出牌")
-    else:
-        print(f"\n🤖 [强制] 玩家{player} 出: {cards_str} ({type_cn})")
 
     remaining = _format_hand(ns.masks[player])
     print(f"玩家{player} 剩余手牌: [{remaining}]")

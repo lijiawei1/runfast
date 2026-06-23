@@ -125,12 +125,8 @@ def format_sequence(seq: list) -> str:
     lines = ["⚠️ 当前局面同盟有必胜策略！", "必胜序列（示例）："]
 
     for player, move in seq:
-        if len(move) == 5:
-            _nm, ttype, _rank, _ts, orders = move
-        else:
-            _nm, trick_obj, orders = move
-            ttype = trick_obj.type
-
+        ttype = move.type
+        orders = move.orders
         type_cn = _TYPE_CN.get(ttype, ttype)
         cards_str = format_cards(orders)
 
@@ -163,7 +159,7 @@ def enumerate_da_moves(mask: int) -> list[tuple]:
     - 返回的move格式必须与 get_legal_moves_free 一致（5-tuple）
     """
     all_moves = get_legal_moves_free(mask)
-    da_moves = [m for m in all_moves if 0 in m[4]]
+    da_moves = [m for m in all_moves if 0 in m.orders]
     return da_moves
 
 
@@ -191,8 +187,8 @@ def verify_all_da_moves(state: GameState) -> dict[str, list | None]:
 
     for move in da_moves:
         # 构建描述 key
-        ttype = move[1]
-        orders = move[4]
+        ttype = move.type
+        orders = move.orders
         type_cn = _TYPE_CN.get(ttype, ttype)
         cards_str = format_cards(orders)
         desc = f"{type_cn}: {cards_str}"
@@ -217,12 +213,8 @@ def _format_sequence_body(seq: list) -> str:
 
     lines: list[str] = []
     for player, move in seq:
-        if len(move) == 5:
-            _nm, ttype, _rank, _ts, orders = move
-        else:
-            _nm, trick_obj, orders = move
-            ttype = trick_obj.type
-
+        ttype = move.type
+        orders = move.orders
         type_cn = _TYPE_CN.get(ttype, ttype)
         cards_str = format_cards(orders)
 
@@ -329,12 +321,8 @@ def format_best_response(seq: list) -> str:
     lines = ["⚠️ 同盟有最优应对策略！", "同盟最优应对序列："]
 
     for player, move in seq:
-        if len(move) == 5:
-            _nm, ttype, _rank, _ts, orders = move
-        else:
-            _nm, trick_obj, orders = move
-            ttype = trick_obj.type
-
+        ttype = move.type
+        orders = move.orders
         type_cn = _TYPE_CN.get(ttype, ttype)
         cards_str = format_cards(orders)
 

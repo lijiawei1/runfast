@@ -1,7 +1,7 @@
 """夺A快跑 — 牌型识别、合法出牌枚举器、全局最大判断"""
 
 from itertools import combinations
-from models import Card, Trick
+from models import Card, Trick, Move
 
 
 def get_counts(hand: list[Card]) -> dict[int, int]:
@@ -90,11 +90,11 @@ def get_max_single(mask: int) -> int | None:
 
 def get_legal_moves_free(
     mask: int, next_player_mask: int | None = None
-) -> list[tuple[int, str, int, int, list[int]]]:
+) -> list[Move]:
     """
     自由出牌枚举器（trick 为空时，玩家可以任意出合法牌型）。
 
-    返回: [(new_mask, trick_type, rank, top_suit, [card_orders]), ...]
+    返回: list[Move]（自由出牌 5-tuple 格式）
     """
     cards = _mask_to_cards(mask)
 
@@ -106,7 +106,7 @@ def get_legal_moves_free(
             rank_cards[r] = []
         rank_cards[r].append(c)
 
-    moves: list[tuple[int, str, int, int, list[int]]] = []
+    moves: list[Move] = []
 
     for rank, cards_r in rank_cards.items():
         cnt = len(cards_r)
@@ -114,7 +114,7 @@ def get_legal_moves_free(
         # 单张
         for c in cards_r:
             new_mask = mask & ~(1 << c.order)
-            moves.append((new_mask, "single", rank, c.suit, [c.order]))
+            moves.append(Move.from_free(new_mask, "single", rank, c.suit, [c.order]))
 
         # 对子
         if cnt >= 2:
@@ -122,7 +122,7 @@ def get_legal_moves_free(
                 new_mask = mask
                 for o in orders:
                     new_mask &= ~(1 << o)
-                moves.append((new_mask, "pair", rank, ts, orders))
+                moves.append(Move.from_free(new_mask, "pair", rank, ts, orders))
 
         # 三条
         if cnt >= 3:
@@ -130,7 +130,7 @@ def get_legal_moves_free(
                 new_mask = mask
                 for o in orders:
                     new_mask &= ~(1 << o)
-                moves.append((new_mask, "triple", rank, ts, orders))
+                moves.append(Move.from_free(new_mask, "triple", rank, ts, orders))
 
         # 四条
         if cnt >= 4:
@@ -138,15 +138,15 @@ def get_legal_moves_free(
                 new_mask = mask
                 for o in orders:
                     new_mask &= ~(1 << o)
-                moves.append((new_mask, "quad", rank, ts, orders))
+                moves.append(Move.from_free(new_mask, "quad", rank, ts, orders))
 
     # ── 下家只剩一张牌约束 ──
     if next_player_mask is not None and next_player_mask.bit_count() == 1:
-        singles = [m for m in moves if m[1] == "single"]
-        non_singles = [m for m in moves if m[1] != "single"]
+        singles = [m for m in moves if m.type == "single"]
+        non_singles = [m for m in moves if m.type != "single"]
         if singles:
             max_order = get_max_single(mask)
-            singles = [m for m in singles if m[4][0] == max_order]
+            singles = [m for m in singles if m.orders[0] == max_order]
         moves = non_singles + singles
 
     return moves
@@ -157,11 +157,11 @@ _TRICK_SIZE = {"single": 1, "pair": 2, "triple": 3, "quad": 4}
 
 def get_legal_moves_response(
     mask: int, trick: Trick, next_player_mask: int | None = None
-) -> list[tuple[int, Trick, list[int]]]:
+) -> list[Move]:
     """
     接力压制枚举器（trick 不为空时，只能出同牌型且更大的牌）。
 
-    返回: [(new_mask, new_trick, [card_orders]), ...]
+    返回: list[Move]（接力压制 3-tuple 格式）
 
     规则: 必须同牌型；先比 rank 再比 top_suit；无可管牌返回空列表。
     """
@@ -180,7 +180,7 @@ def get_legal_moves_response(
 
     ttype = trick.type
     k = _TRICK_SIZE[ttype]
-    moves: list[tuple[int, Trick, list[int]]] = []
+    moves: list[Move] = []
 
     # 单张
     if ttype == "single":
@@ -191,12 +191,12 @@ def get_legal_moves_response(
                 if rank > trick.rank or c.suit > trick.top_suit:
                     new_mask = mask & ~(1 << c.order)
                     new_trick = Trick("single", rank, c.suit)
-                    moves.append((new_mask, new_trick, [c.order]))
+                    moves.append(Move.from_response(new_mask, new_trick, [c.order]))
 
         # ── 下家只剩一张牌约束 ──
         if next_player_mask is not None and next_player_mask.bit_count() == 1 and moves:
             max_order = get_max_single(mask)
-            moves = [m for m in moves if m[2][0] == max_order]
+            moves = [m for m in moves if m.orders[0] == max_order]
 
         return moves
 
@@ -214,13 +214,13 @@ def get_legal_moves_response(
                 for o in orders:
                     new_mask &= ~(1 << o)
                 new_trick = Trick(ttype, rank, ts)
-                moves.append((new_mask, new_trick, orders))
+                moves.append(Move.from_response(new_mask, new_trick, orders))
             elif rank == trick.rank and ts > trick.top_suit:
                 new_mask = mask
                 for o in orders:
                     new_mask &= ~(1 << o)
                 new_trick = Trick(ttype, rank, ts)
-                moves.append((new_mask, new_trick, orders))
+                moves.append(Move.from_response(new_mask, new_trick, orders))
 
     # 非单张牌型不受下家只剩一张牌约束
     return moves
@@ -229,26 +229,37 @@ def get_legal_moves_response(
 # ── 全局最大判断 ──
 
 
-def is_global_max(move: tuple, all_masks: tuple[int, ...]) -> bool:
+def _ensure_move(move: Move | tuple) -> Move:
+    """将原始 tuple 转换为 Move 对象（向后兼容辅助函数）。
+
+    处理两种格式：
+      - 自由出牌 (5-tuple):  (new_mask, type_str, rank, top_suit, [orders])
+      - 接力压制 (3-tuple):  (new_mask, trick_obj, [orders])
+    """
+    if isinstance(move, Move):
+        return move
+    if len(move) == 5:
+        return Move.from_free(move[0], move[1], move[2], move[3], move[4])
+    return Move.from_response(move[0], move[1], move[2])
+
+
+def is_global_max(move: Move | tuple, all_masks: tuple[int, ...]) -> bool:
     """
     判断一手出牌是否为该牌型的全局唯一最大。
 
     输入:
-        move: 出牌元组，兼容两种格式：
+        move: Move 对象或原始 tuple（向后兼容），支持两种格式：
               - 自由出牌: (new_mask, type_str, rank, top_suit, [orders])  (5-tuple)
               - 接力压制: (new_mask, trick_obj, [orders])                 (3-tuple)
         all_masks: 所有玩家的手牌 mask（含出牌人自己的 mask）
 
     返回: True 表示这是全局最大且唯一（直接接管）；False 则正常轮询。
     """
-    # 提取 move 信息
-    if len(move) == 5:
-        _, ttype, rank, top_suit, orders = move
-    else:
-        _, trick_obj, orders = move
-        ttype = trick_obj.type
-        rank = trick_obj.rank
-        top_suit = trick_obj.top_suit
+    move = _ensure_move(move)
+    ttype = move.type
+    rank = move.rank
+    top_suit = move.top_suit
+    orders = move.orders
 
     # ── 单张：比 order ──
     if ttype == "single":

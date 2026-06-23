@@ -46,6 +46,41 @@ def find_diamond_a_holder(hands: list[list[Card]]) -> int:
     raise ValueError("♦A 不存在")
 
 
+def take_bid_logic(
+    hands: list[list[Card]], bidder: int | None
+) -> tuple[int | None, list[list[Card]]]:
+    """
+    抢A纯逻辑：已知 bidder 后执行换手（或不换）。
+
+    若 bidder 为 None → 无人抢，返回原手牌。
+    若 bidder 非 None → ♦A 从原持有者移到 bidder 手中，每副手牌按 order 排序。
+
+    返回:
+        (bidder, updated_hands)
+    """
+    if bidder is None:
+        return (None, hands)
+
+    original_owner = find_diamond_a_holder(hands)
+
+    # ── 换手：bidder 拿走 ♦A ──
+    updated: list[list[Card]] = [list(h) for h in hands]
+
+    # 从原持有者移除 ♦A
+    updated[original_owner] = [
+        c for c in updated[original_owner]
+        if not (c.rank == 0 and c.suit == 0)
+    ]
+    # bidder 获得 ♦A
+    updated[bidder].append(Card(0, 0))
+
+    # 换手后每副手牌按 order 排序
+    for hand in updated:
+        hand.sort(key=lambda c: c.order)
+
+    return (bidder, updated)
+
+
 def take_bid(hands: list[list[Card]]) -> tuple[int | None, list[list[Card]]]:
     """
     抢A CLI轮询（交互式）。
@@ -71,23 +106,4 @@ def take_bid(hands: list[list[Card]]) -> tuple[int | None, list[list[Card]]]:
             bidder = player
             break
 
-    if bidder is None:
-        return (None, hands)
-
-    # ── 换手：bidder 拿走 ♦A ──
-    # deep copy 手牌结构
-    updated: list[list[Card]] = [list(h) for h in hands]
-
-    # 从原持有者移除 ♦A
-    updated[original_owner] = [
-        c for c in updated[original_owner]
-        if not (c.rank == 0 and c.suit == 0)
-    ]
-    # bidder 获得 ♦A
-    updated[bidder].append(Card(0, 0))
-
-    # 换手后每副手牌按 order 排序
-    for hand in updated:
-        hand.sort(key=lambda c: c.order)
-
-    return (bidder, updated)
+    return take_bid_logic(hands, bidder)

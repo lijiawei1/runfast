@@ -294,7 +294,7 @@ def test_best_response():
     moves = get_legal_moves_free(masks[0])
     move_da = None
     for m in moves:
-        if 0 in m[4]:
+        if 0 in m.orders:
             move_da = m
             break
 
@@ -350,9 +350,9 @@ def test_multi_da_verification():
     da_moves1 = enumerate_da_moves(star_mask1)
     print(f"  enumerate_da_moves 返回 {len(da_moves1)} 种含♦A出牌：")
     for i, m in enumerate(da_moves1):
-        ttype = m[1]
+        ttype = m.type
         type_cn = _TYPE_CN.get(ttype, ttype)
-        cards_str = format_cards(m[4])
+        cards_str = format_cards(m.orders)
         print(f"    {i + 1}. {type_cn}: {cards_str}")
 
     # 测试 verify_all_da_moves
@@ -397,9 +397,9 @@ def test_multi_da_verification():
     da_moves2 = enumerate_da_moves(star_mask2)
     print(f"  enumerate_da_moves 返回 {len(da_moves2)} 种含♦A出牌：")
     for i, m in enumerate(da_moves2):
-        ttype = m[1]
+        ttype = m.type
         type_cn = _TYPE_CN.get(ttype, ttype)
-        cards_str = format_cards(m[4])
+        cards_str = format_cards(m.orders)
         print(f"    {i + 1}. {type_cn}: {cards_str}")
 
     # 验证 solve 确认状态
@@ -427,6 +427,9 @@ def test_multi_da_verification():
 
 
 if __name__ == "__main__":
+    # ── Windows 控制台 UTF-8 编码 ──
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8")
     import argparse
 
     parser = argparse.ArgumentParser(description="夺A快跑 — 训练工具")
