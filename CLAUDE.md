@@ -13,3 +13,5 @@
 - **Move 格式**：新代码使用 `models.Move` 类（`from_free()` / `from_response()` 工厂方法），旧代码（solver.py/moves.py）待逐步迁移
 - **测试**：新测试放 `tests/` 目录，每个模块一个 test 文件
 - **CLI 逻辑分离**：库模块中的 `input()`/`print()` 应分离为 `*_logic()` 纯函数 + CLI 包装函数
+- **求解器缓存**：`solve()` 使用 `lru_cache(maxsize=500000)`，长时 Web 运行可调用 `clear_solve_cache()` 释放内存
+- **IO 分离已完成**：`deck.take_bid_logic()` / `config_loader.select_scenario_logic()` 已纯函数化，`sys.stdout.reconfigure` 已移至 `main.py`

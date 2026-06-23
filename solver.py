@@ -30,6 +30,11 @@ def _apply_move(
     return GameState(tuple(masks), new_trick, next_turn, starter)
 
 
+def clear_solve_cache() -> None:
+    """清空 solve() 的 memoization 缓存（长时 Web 运行时可定期调用防 OOM）。"""
+    solve.cache_clear()
+
+
 @lru_cache(maxsize=500000)
 def solve(state: GameState) -> bool:
     """

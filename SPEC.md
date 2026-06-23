@@ -330,3 +330,4 @@ python main.py
 | v0.9 | 新增预设手牌场景加载：config_loader.py（YAML解析+验证+手牌转换）、configs/hands.yaml、main.py 新增 --load/--scene 参数 |
 | v0.10 | UI 重构（app.py）：① 手牌区卡片固定大小（3.2×4.8rem居中），不再横向拉伸；② 「本轮出牌」→「历史出牌」，跨轮保留全部出牌记录，按轮次分组可滚动；③ ★ 出牌控件（出牌/清空/Pass）移至「历史出牌」下方、手牌上方，去除「训练模式一/二」子标题；④ 对手回合控件独立显示，不与★控件混排 |
 | v0.11 | **R6 模块化拆分**：① app.py 1560→468行，拆分为 app_styles/app_render/app_play/game_engine 四个模块；② Move 类替代 tuple，cli.py/sequence.py 迁移；③ game_engine.py 统一 CLI/Web 规则逻辑；④ 新增 tests/ 目录（6文件，116测试）；⑤ deck.take_bid_logic() 纯函数分离；⑥ 修复 SOLVER_MISS 导致的求解器逻辑错误 |
+| v0.12 | **R3/R4/R5 收尾**：① solver.py lru_cache `maxsize=500000` + `clear_solve_cache()` 函数；② config_loader.py `select_scenario_logic`/`select_scenario_cli` 纯逻辑/IO分离（已完成）；③ models.py stdout副作用已移至 main.py（已完成）；④ Streamlit 环境修复（starlette 1.3.1） |

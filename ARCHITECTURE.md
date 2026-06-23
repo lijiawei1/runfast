@@ -16,10 +16,10 @@
 | **对外接口** | `Card`, `Trick`, `GameState`, `RANK_NAMES`, `SUIT_NAMES`, `_TYPE_CN`, `format_cards()`, `_format_hand()` |
 | **输入** | 基本类型（int, str, dict） |
 | **输出** | `Card` (class), `Trick` (frozen dataclass), `GameState` (frozen dataclass), 格式字符串 |
-| **依赖** | `sys` (仅用于 Windows UTF-8 配置), `dataclasses` |
+| **依赖** | `dataclasses` |
 | **被依赖** | 被 **所有模块** 直接导入 |
 
-> ⚠️ **副作用**: 模块级代码执行 `sys.stdout.reconfigure(encoding="utf-8")`，这是一个全局副作用 —— 任何 import models 的模块都会触发 Windows 控制台编码变更。
+> ✅ **v0.11**: `sys.stdout.reconfigure()` 副作用已移至 `main.py:if __name__`，models.py 无全局副作用。
 
 ---
 
@@ -286,15 +286,12 @@
 |---|------|----------|
 | C1 | `moves.py` ↔ `solver.py` ↔ `cli.py` ↔ `app.py` ↔ `sequence.py` | **move 元组格式耦合**：move 有两种格式（5-tuple 自由出牌 / 3-tuple 接力压制），所有消费方通过 `len(move) == 5` 做分支。~~这种"隐式多态"分散在 6 个文件中~~ → 🟡 **R6 部分缓解**：`models.Move` 类已创建，`cli.py`/`sequence.py`/`game_engine.py` 已迁移，`solver.py` 和 `moves.py` 仍用旧格式。 |
 | C3 | `sequence.py:84` | `_dfs_win_seq()` ★ 回合直接取 `moves[0]` 作为序列节点。这不依赖全局状态，但依赖 `get_legal_moves_*` 的内部排序 —— 排序一变，序列结果就变。 |
-| C4 | `models.py:7-8` | 模块级全局副作用：`sys.stdout.reconfigure(encoding="utf-8")`。任何 import models 的模块都会触发。如果测试框架或 Web 服务器重定向了 stdout，可能导致异常。 |
-| C5 | `solver.py:93-98` / `solver.py:36` | `lru_cache(maxsize=None)` 无上限缓存。在 Web 环境长时间运行且状态空间大时可能 OOM。 |
-
 ### 🟡 中危
 
 | # | 位置 | 问题描述 |
 |---|------|----------|
+| C3 | `sequence.py:84` | `_dfs_win_seq()` ★ 回合直接取 `moves[0]` 作为序列节点。这不依赖全局状态，但依赖 `get_legal_moves_*` 的内部排序 —— 排序一变，序列结果就变。 |
 | C6 | `deck.py:49` | `take_bid()` 使用全局 `input()` —— CLI 专用，无法在 Web/自动化中复用。 |
-| C7 | `config_loader.py:82` | `_select_scenario()` 使用 `input()`/`print()` —— 同样 CLI 专用。 |
 | C11 | `test_game.py` 全部 | 通过 `game` 模块导入（而非直接从子模块），如果 `game.py` 做了不当的 re-export，测试可能测到错误的对象。 |
 | C12 | `moves.py` 多处 | `_mask_to_cards()` 在 `is_global_max()` 内部被重复调用（对每个 mask 都调用一次），且与 `solver.py` 中的 mask→cards 逻辑隐式重复。 |
 
@@ -306,6 +303,14 @@
 | ~~C8~~ | `app.py` 重实现 deck.py 抢A逻辑 | → `deck.take_bid_logic()` 纯函数，对 CLI 和 Web 复用 |
 | ~~C9~~ | 全局最大接管状态构造分散 | → `game_engine.apply_move_with_global_max()` 封装 |
 | ~~C10~~ | `main.py` 内嵌测试函数 | → 迁移到 `tests/test_sequence.py` |
+
+### ✅ 已解决（R3/R4/R5）
+
+| # | 位置 | 解法 |
+|---|------|------|
+| ~~C5~~ | solver.py lru_cache 无上限 | → `maxsize=500000` + `clear_solve_cache()` 函数 |
+| ~~C7~~ | config_loader.py `input()` 混在库模块 | → `select_scenario_logic()` 纯函数 + `select_scenario_cli()` IO 包装 |
+| ~~C4~~ | models.py stdout 副作用 | → `sys.stdout.reconfigure()` 已移至 `main.py:if __name__` |
 
 ---
 
@@ -376,12 +381,10 @@
 | 优先级 | 问题编号 | 问题简述 | 影响范围 |
 |:------:|----------|----------|----------|
 | 🔴 P0 | C1 | move 元组格式耦合（solver.py/moves.py 残留） | solver.py, moves.py |
-| 🔴 P1 | C5 | `lru_cache(maxsize=None)` 无上限 | solver.py，OOM风险 |
 | 🔴 P1 | — | `app.py`/`app_play.py`/`app_render.py` Web UI 零测试 | 3个文件 |
-| 🟡 P2 | C6/C7 | `input()` 调用在库模块中 | deck.py, config_loader.py |
+| 🟡 P2 | C6 | `input()` 调用在库模块中（deck.take_bid） | deck.py |
 | 🟡 P2 | C3 | `_dfs_win_seq()` ★ 回合取 `moves[0]` 不稳定 | sequence.py |
 | 🟢 P3 | C11 | `test_game.py` 通过 game 模块导入 | 测试可靠性 |
-| 🟢 P3 | C4 | `models.py` 模块级 stdout 副作用 | 全局 |
 
 > ~~P2 `app.py` 1560行单文件~~ ✅ R6 已解决 → 拆分为 5 个模块
 
@@ -392,9 +395,8 @@
 1. **P0: 将 solver.py/moves.py 迁移到 Move 类** — 彻底消除 3-tuple/5-tuple 分支
 2. **P0: 为 game_engine.py 补独立测试** — 目前仅间接通过 cli 测试覆盖
 3. **P1: 为 app_play.py 核心逻辑补测试** — mock streamlit 以测试出牌交互逻辑
-4. **P2: 分离 deck.py/config_loader.py 的纯逻辑与 IO** — 消除 `input()` 在库模块中
-5. **P2: solver.py 缓存加限** — `lru_cache(maxsize=500000)` 防 OOM
-6. **P3: _dfs_win_seq() 确定性排序** — 让序列结果稳定可复现
+4. **P2: 分离 deck.take_bid 的纯逻辑与 IO** — 消除 `input()` 在库模块中
+5. **P3: _dfs_win_seq() 确定性排序** — 让序列结果稳定可复现
 
 ---
 
@@ -405,7 +407,7 @@
 | ~~Move 格式多态~~ | ~~3-tuple/5-tuple 通过 len 区分~~ | → ✅ `Move` dataclass 已创建，solver/moves 待迁移 |
 | ~~app.py / cli.py 重复~~ | ~~游戏规则逻辑在 UI 层重复实现~~ | → ✅ `game_engine.py` 已创建，规则函数化完成 |
 | ~~全局最大接管分散~~ | ~~is_global_max() + 手动构造 GameState~~ | → ✅ `game_engine.apply_move_with_global_max()` |
-| ~~CLI 函数与核心逻辑混用~~ | ~~take_bid() / _select_scenario() 含 input()~~ | → ✅ `deck.take_bid_logic()` 纯函数分离 |
-| 内存风险 | solver 的 `lru_cache(maxsize=None)` | 加上限 `maxsize=500000` 或在特定时机 `cache_clear()` |
-| `main.py` 含测试代码 | 170行测试函数在入口文件中 | → ✅ 已迁移到 `tests/test_sequence.py` |
-| `models.py` 模块级副作用 | `sys.stdout.reconfigure()` 全局生效 | 移入 `cli.py` 的 `if __name__` 或 `main()` |
+| ~~CLI 函数与核心逻辑混用~~ | ~~take_bid() / _select_scenario() 含 input()~~ | → ✅ `deck.take_bid_logic()` + `config_loader.select_scenario_logic()` 纯函数分离 |
+| ~~内存风险~~ | ~~solver 的 lru_cache 无上限~~ | → ✅ `maxsize=500000` + `clear_solve_cache()` |
+| ~~`main.py` 含测试代码~~ | ~~170行测试函数在入口文件中~~ | → ✅ 已迁移到 `tests/test_sequence.py` |
+| ~~`models.py` 模块级副作用~~ | ~~sys.stdout.reconfigure() 全局生效~~ | → ✅ 已移至 `main.py:if __name__` |

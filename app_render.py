@@ -3,6 +3,8 @@
 所有 HTML 渲染函数（含 Streamlit 组件渲染），从 app.py 分离。
 """
 
+from __future__ import annotations
+
 import streamlit as st
 from models import Card, GameState, Trick, RANK_NAMES, _TYPE_CN, format_cards
 
