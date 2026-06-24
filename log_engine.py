@@ -106,8 +106,87 @@ class MultiDaLog(LogEntry):
 # View Layer  CLI  —  终端渲染
 # ══════════════════════════════════════════════════════════════════════
 
+BOX_WIDTH = 42
+
+
+def _visible_len(s: str) -> int:
+    """计算字符串的可见宽度（中文/emoji 宽字符计 2）。"""
+    w = 0
+    for ch in s:
+        if '\u4e00' <= ch <= '\u9fff' or '\u3000' <= ch <= '\u303f' or '\uff00' <= ch <= '\uffef':
+            w += 2
+        elif ord(ch) > 127:
+            w += 1
+        else:
+            w += 1
+    return w
+
+
+def print_box_top() -> None:
+    """打印双线框顶部"""
+    print(f"╔{'═' * (BOX_WIDTH - 2)}╗")
+
+
+def print_box_bottom() -> None:
+    """打印双线框底部"""
+    print(f"╚{'═' * (BOX_WIDTH - 2)}╝")
+
+
+def print_box_sep() -> None:
+    """打印双线框分隔线"""
+    print(f"╠{'═' * (BOX_WIDTH - 2)}╣")
+
+
+def print_box_line(content: str = "", align: str = "left") -> None:
+    """打印框内行。align: 'left' / 'center'"""
+    visible = _visible_len(content)
+    pad_total = max(0, BOX_WIDTH - 2 - visible)
+    if align == "center":
+        left = pad_total // 2
+        right = pad_total - left
+        text = " " * left + content + " " * right
+    else:
+        text = content + " " * pad_total
+    print(f"║{text}║")
+
+
+def print_section_star() -> None:
+    """打印 ★ 回合分隔框头部"""
+    print()
+    print_box_top()
+    print_box_line("★ 回合", align="center")
+    print_box_sep()
+
+
+def print_section_opponent(is_forced: bool = False) -> None:
+    """打印对手回合分隔框头部"""
+    print()
+    print_box_top()
+    title = "对手回合（强制执行）" if is_forced else "对手回合"
+    print_box_line(title, align="center")
+    print_box_sep()
+
+
+def print_section_static() -> None:
+    """打印静态分析分隔框头部"""
+    print()
+    print_box_top()
+    print_box_line("📈 静态分析：多♦A分支验证", align="center")
+    print_box_sep()
+
+
+def print_section_game_end() -> None:
+    """打印终局分隔框头部"""
+    print()
+    print_box_top()
+    print_box_line("🎉 游戏结束", align="center")
+    print_box_sep()
+
+
+# ── 内部渲染函数（统一缩进规范）──
+
 def _print_section_cli(entry: Section) -> None:
-    """渲染分节符到终端"""
+    """渲染分节符到终端（非框内场景使用）"""
     if entry.style == "double":
         line = "═" * 6
         print(f"\n{line} {entry.title} {line}")
@@ -125,10 +204,10 @@ def _print_move_cli(entry: MoveLog) -> None:
     else:
         prefix = "🤖 "
 
-    print(f"  → {prefix}{entry.player_label} 出: {entry.move_desc}")
+    print(f"  {prefix}{entry.player_label} 出: {entry.move_desc}")
     print(f"    剩余: {entry.remaining}")
     if entry.global_max:
-        print("🎯 全局最大！直接继续出牌")
+        print("  🎯 全局最大！直接继续出牌")
 
 
 def _print_pass_cli(entry: PassLog) -> None:
@@ -144,17 +223,15 @@ def _print_analysis_cli(entry: AnalysisLog) -> None:
     """渲染局面分析到终端"""
     emoji = "✅" if entry.is_win else "❌"
     result = "★必胜" if entry.is_win else "★必败"
-    print(f"📊 局面分析：{emoji} {result}")
-    print(f"  ★ 手牌：{entry.hand_str}")
-    print(f"  桌上：{entry.trick_str}")
+    print(f"  📊 局面：{emoji} {result}")
 
 
 def _print_moves_list_cli(entry: MovesListLog) -> None:
     """渲染可选出牌列表到终端"""
-    print("📋 可选出牌：")
+    print("  📋 可选出牌：")
     for is_win, type_cn, cards_str, orders_str in entry.entries:
         emoji = "✅" if is_win else "❌"
-        print(f"   {emoji} {type_cn}: {cards_str}  [{orders_str}]")
+        print(f"     {emoji} {type_cn}: {cards_str}  [{orders_str}]")
 
 
 def _print_sequence_cli(entry: SequenceLog) -> None:
@@ -164,24 +241,30 @@ def _print_sequence_cli(entry: SequenceLog) -> None:
         if line.is_final:
             print(f"   {line.player_label} {line.action}")
         else:
-            print(f"   {line.player_label} → {line.action}")
+            print(f"   → {line.player_label} → {line.action}")
 
 
 def _print_event_cli(entry: EventLog) -> None:
     """渲染关键事件到终端"""
-    print(f"{entry.emoji} {entry.message}")
+    print(f"  {entry.emoji} {entry.message}")
 
 
 def _print_setup_cli(entry: SetupLog) -> None:
     """渲染初始化信息到终端"""
     for line in entry.lines:
-        print(line)
+        if line.startswith("=== "):
+            print(f"  {line}")
+        else:
+            print(line)
 
 
 def _print_multi_da_cli(entry: MultiDaLog) -> None:
-    """渲染多♦A分支验证到终端"""
+    """渲染多♦A分支验证到终端（使用框内格式）"""
     for line in entry.lines:
-        print(line)
+        if line.strip():
+            print_box_line(f"  {line}")
+        else:
+            print_box_line()
 
 
 def render_entry_cli(entry: LogEntry) -> None:

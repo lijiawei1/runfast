@@ -18,6 +18,10 @@ from log_engine import (
     log_moves_list,
     log_event,
     log_global_max,
+    print_box_bottom,
+    print_box_line,
+    print_section_star,
+    print_section_opponent,
 )
 
 
@@ -103,7 +107,7 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
     # 分析所有出牌
     overall_result, winning_moves_info, losing_moves_info = analyze_moves(state)
 
-    # ── 局面分析 ──
+    # ── 局面分析（框内）──
     star_cards: list[Card] = []
     max_bit = state.masks[0].bit_length()
     for order in range(max_bit):
@@ -111,7 +115,14 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
             star_cards.append(Card(order // 4, order % 4))
     hand_str = f"[{', '.join(str(c) for c in star_cards)}]"
     trick_str = str(state.trick) if state.trick else "无（首出）"
-    log_analysis(overall_result, hand_str, trick_str)
+
+    # ── 打印 ★ 回合框 ──
+    print_section_star()
+    emoji = "✅" if overall_result else "❌"
+    result = "★必胜" if overall_result else "★必败"
+    print_box_line(f"  📊 局面：{emoji} {result}")
+    print_box_line(f"  ★ 手牌：{hand_str}")
+    print_box_line(f"  桌上：{trick_str}")
 
     # ── 判断是否为首出（trick=None 且 ♦A 仍在手）──
     requires_da = first_play_requires_da(state)
@@ -127,7 +138,14 @@ def _play_star_turn(state: GameState, moves: list) -> GameState:
         order_tag = ", ".join(str(o) for o in orders)
         is_win = label == "✅"
         move_entries.append((is_win, type_cn, cards_str, order_tag))
-    log_moves_list(move_entries)
+
+    # 可选出牌列表（框内）
+    print_box_line()
+    print_box_line("  📋 可选出牌：")
+    for is_win, type_cn, cards_str, orders_str in move_entries:
+        mark = "✅" if is_win else "❌"
+        print_box_line(f"     {mark} {type_cn}: {cards_str}  [{orders_str}]")
+    print_box_bottom()
 
     # 玩家输入循环
     while True:
@@ -197,8 +215,14 @@ def _play_opponent_turn(state: GameState, player: int) -> GameState:
     ns = apply_move_with_global_max(state, best_move, player)
     gm = is_global_max(best_move, state.masks)
     remaining = _format_hand(ns.masks[player])
-    log_opponent_move(player, f"[{remaining}]", f"{cards_str}（{type_cn}）",
-                      global_max=gm)
+
+    # ── 对手回合框 ──
+    print_section_opponent()
+    print_box_line(f"  🤖 玩家{player} 出: {cards_str}（{type_cn}）")
+    print_box_line(f"    剩余: [{remaining}]")
+    if gm:
+        print_box_line(f"  🎯 全局最大！直接继续出牌")
+    print_box_bottom()
 
     return ns
 
@@ -234,7 +258,13 @@ def execute_forced_move(state: GameState, forced_move: tuple) -> GameState:
     ns = apply_move_with_global_max(state, forced_move, player)
     gm = is_global_max(forced_move, state.masks)
     remaining = _format_hand(ns.masks[player])
-    log_opponent_move(player, f"[{remaining}]", f"{cards_str}（{type_cn}）",
-                      is_forced=True, global_max=gm)
+
+    # ── 对手回合（强制执行）框 ──
+    print_section_opponent(is_forced=True)
+    print_box_line(f"  🤖 玩家{player} 出: {cards_str}（{type_cn}）")
+    print_box_line(f"    剩余: [{remaining}]")
+    if gm:
+        print_box_line(f"  🎯 全局最大！直接继续出牌")
+    print_box_bottom()
 
     return ns

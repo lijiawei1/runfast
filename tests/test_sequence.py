@@ -30,16 +30,15 @@ class TestFormatSequence:
     """format_sequence() — 序列格式化"""
 
     def test_none_input(self):
-        """★ 必胜时返回提示"""
+        """None 表示★必胜，同盟无必胜序列"""
         result = format_sequence(None)
-        assert "★ 必胜" in result
-        assert "无必胜序列" in result
+        assert "同盟无必胜序列" in result
 
     def test_empty_sequence(self):
         """空序列（对手直接出完）"""
         result = format_sequence([])
-        assert "同盟有必胜策略" in result
         assert "已无路可退" in result
+        assert "对手将直接出完" in result
 
     def test_sequence_with_star_and_opponent(self):
         """含 ★ 和对手出牌的序列"""
@@ -49,7 +48,6 @@ class TestFormatSequence:
             (1, Move.from_free(0, "single", 0, 1, [1])),   # P1 出 ♣A
         ]
         result = format_sequence(seq)
-        assert "同盟有必胜策略" in result
         assert "★ → 出" in result
         assert "玩家1 → 出" in result
 
@@ -180,9 +178,9 @@ class TestFormatBestResponse:
     """format_best_response() — 最优应对格式化"""
 
     def test_empty_sequence(self):
-        """空序列 → ★ 必胜提示"""
+        """空序列 → 同盟无应对策略"""
         result = format_best_response([])
-        assert "★ 必胜" in result
+        assert "同盟无应对策略" in result
 
     def test_nonempty_sequence(self):
         """非空序列 → 包含应对描述"""
@@ -191,8 +189,8 @@ class TestFormatBestResponse:
             (2, Move.from_free(0, "single", 0, 2, [2])),
         ]
         result = format_best_response(seq)
-        assert "同盟有最优应对" in result
         assert "玩家1 → 出" in result
+        assert "玩家2 → 出" in result
         assert "★ 最终失败" in result
 
     def test_3_tuple_in_sequence(self):

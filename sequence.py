@@ -111,19 +111,17 @@ def format_sequence(seq: list) -> str:
     将 List[Action] 转换为可读字符串。
 
     格式示例：
-        ⚠️ 当前局面同盟有必胜策略！
-        必胜序列（示例）：
+        ★ → 出 ♦A（单张）
         玩家1 → 出 ♣A（单张）
-        玩家2 → 出 ♥A（单张）
         ★ 最终无法出牌/最后出完
     """
     if seq is None:
-        return "✅ ★ 必胜，同盟无必胜序列。"
+        return "同盟无必胜序列"
 
     if not seq:
-        return "⚠️ 当前局面同盟有必胜策略！\n（★ 已无路可退，对手将直接出完）"
+        return "★ 已无路可退，对手将直接出完"
 
-    lines = ["⚠️ 当前局面同盟有必胜策略！", "必胜序列（示例）："]
+    lines: list[str] = []
 
     for player, move in seq:
         ttype = move.type
@@ -132,11 +130,11 @@ def format_sequence(seq: list) -> str:
         cards_str = format_cards(orders)
 
         if player == 0:
-            lines.append(f"★ → 出 {cards_str}（{type_cn}）")
+            lines.append(f"  ★ → 出 {cards_str}（{type_cn}）")
         else:
-            lines.append(f"玩家{player} → 出 {cards_str}（{type_cn}）")
+            lines.append(f"  玩家{player} → 出 {cards_str}（{type_cn}）")
 
-    lines.append("★ 最终无法出牌/最后出完")
+    lines.append("  ★ 最终无法出牌/最后出完")
     return "\n".join(lines)
 
 
@@ -210,7 +208,7 @@ def verify_all_da_moves(state: GameState) -> dict[str, list | None]:
 def _format_sequence_body(seq: list) -> str:
     """格式化同盟必胜序列的主体（不含头部/尾部标题），供多分支展示使用。"""
     if not seq:
-        return "（★ 已无路可退，对手将直接出完）"
+        return "      （★ 已无路可退，对手将直接出完）"
 
     lines: list[str] = []
     for player, move in seq:
@@ -220,17 +218,17 @@ def _format_sequence_body(seq: list) -> str:
         cards_str = format_cards(orders)
 
         if player == 0:
-            lines.append(f"★ → 出 {cards_str}（{type_cn}）")
+            lines.append(f"      ★ → 出 {cards_str}（{type_cn}）")
         else:
-            lines.append(f"玩家{player} → 出 {cards_str}（{type_cn}）")
+            lines.append(f"      玩家{player} → 出 {cards_str}（{type_cn}）")
 
-    lines.append("★ 最终无法出牌/最后出完")
+    lines.append("      ★ 最终无法出牌/最后出完")
     return "\n".join(lines)
 
 
 def format_multi_da_verification(result_dict: dict[str, list | None]) -> str:
     """
-    将多分支验证结果格式化为可读字符串。
+    将多分支验证结果格式化为可读字符串（适配框内展示）。
 
     输入: verify_all_da_moves 返回的字典
     输出: 格式化字符串
@@ -238,8 +236,10 @@ def format_multi_da_verification(result_dict: dict[str, list | None]) -> str:
     输出格式（同盟全有必胜序列时）:
         ⚠️ 当前局面同盟有必胜策略！
         ★ 可选择以下含♦A出牌，同盟均有必胜应对：
+
         【出法1】单张: ♦A
-        同盟必胜序列：...
+        同盟必胜序列：
+        ...
 
     输出格式（存在★胜招时）:
         ⚠️ ★ 有胜招！
@@ -256,25 +256,25 @@ def format_multi_da_verification(result_dict: dict[str, list | None]) -> str:
         winning_moves: list[str] = []
         for i, (desc, seq) in enumerate(result_dict.items(), 1):
             if seq is None:
-                lines.append(f"【出法{i}】{desc} → 同盟无必胜序列 ❌")
+                lines.append(f"  【出法{i}】{desc} → 同盟无必胜序列 ❌")
                 winning_moves.append(desc)
             else:
-                lines.append(f"【出法{i}】{desc} → 同盟必胜 ✅")
+                lines.append(f"  【出法{i}】{desc} → 同盟必胜 ✅")
         if winning_moves:
             lines.append("")
-            lines.append(f"建议：出 {winning_moves[0]} 可破局！")
+            lines.append(f"  建议：出 {winning_moves[0]} 可破局！")
     else:
         lines.append("⚠️ 当前局面同盟有必胜策略！")
         lines.append("")
         lines.append("★ 可选择以下含♦A出牌，同盟均有必胜应对：")
         lines.append("")
         for i, (desc, seq) in enumerate(result_dict.items(), 1):
-            lines.append(f"【出法{i}】{desc}")
+            lines.append(f"  【出法{i}】{desc}")
             if seq is not None:
+                lines.append("    同盟必胜序列：")
                 body = _format_sequence_body(seq)
-                lines.append("同盟必胜序列：")
                 for line in body.split("\n"):
-                    lines.append("  " + line)
+                    lines.append(line)
             lines.append("")
 
     return "\n".join(lines)
@@ -311,15 +311,14 @@ def format_best_response(seq: list) -> str:
     将同盟最优应对序列格式化为可读文本。
 
     格式示例：
-        ⚠️ 同盟有最优应对策略！
-        最优应对序列：
-        玩家1 → 出 ♣A（单张）
-        ★ 最终失败！
+      → 玩家1 → 出 ♥7 ♠7（对子）
+      → 玩家1 → 出 ♦3（单张）
+      ★ 最终失败！
     """
     if not seq:
-        return "✅ ★ 必胜，同盟无应对策略。"
+        return "同盟无应对策略"
 
-    lines = ["⚠️ 同盟有最优应对策略！", "同盟最优应对序列："]
+    lines: list[str] = []
 
     for player, move in seq:
         ttype = move.type
@@ -328,9 +327,9 @@ def format_best_response(seq: list) -> str:
         cards_str = format_cards(orders)
 
         if player == 0:
-            lines.append(f"★ → 出 {cards_str}（{type_cn}）")
+            lines.append(f"   → ★ → 出 {cards_str}（{type_cn}）")
         else:
-            lines.append(f"玩家{player} → 出 {cards_str}（{type_cn}）")
+            lines.append(f"   → 玩家{player} → 出 {cards_str}（{type_cn}）")
 
-    lines.append("★ 最终失败！")
+    lines.append("  ★ 最终失败！")
     return "\n".join(lines)

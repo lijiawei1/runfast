@@ -15,6 +15,8 @@ from config_loader import load_yaml_config, validate_and_parse_scenario
 from log_engine import (
     log_setup, log_event, log_section, log_star_win, log_star_lose,
     log_sequence, log_multi_da,
+    print_box_bottom, print_box_line, print_box_sep,
+    print_section_static, print_section_game_end,
 )
 
 
@@ -147,16 +149,22 @@ def setup_game_from_config(config_path: str, scenario_id: int | None = None) -> 
     return state
 
 
+def _print_game_end_box(winner: int) -> None:
+    """以箱子格式打印终局信息"""
+    print_section_game_end()
+    if winner == 0:
+        print_box_line("  🎉 ★ 获胜！")
+    else:
+        print_box_line(f"  💀 玩家{winner} 先出完，★失败！")
+    print_box_bottom()
+
+
 def mode1_game_loop(state: GameState) -> None:
     """训练模式一：实时交互训练（原 main() 的游戏循环）"""
     while True:
         winner, game_over = check_terminal(state)
         if game_over:
-            log_section("游戏结束", "double")
-            if winner == 0:
-                log_star_win()
-            else:
-                log_star_lose(winner)
+            _print_game_end_box(winner)
             break
         state = play_turn(state)
 
@@ -167,13 +175,20 @@ def mode2_game_loop(state: GameState) -> None:
     同盟对手严格按 find_best_response 返回的序列出牌，
     ★无论怎么出牌，同盟都按最优路径应对。
     """
-    # ── 静态分析阶段 ──
-    log_section("静态分析：多♦A分支验证", "single")
-    log_event("📊", "分析每种含♦A出牌的同盟必胜序列...")
+    # ── 静态分析阶段（框内）──
+    print_section_static()
+    log_setup(["📊 分析每种含♦A出牌的同盟必胜序列..."])
     result_dict = verify_all_da_moves(state)
     da_text = format_multi_da_verification(result_dict)
     has_star_winning = any(seq is None for seq in result_dict.values())
-    log_multi_da(da_text.split("\n"), has_star_winning=has_star_winning)
+
+    # 框内打印多♦A分支验证结果
+    for line in da_text.split("\n"):
+        if line.strip():
+            print_box_line(f"  {line}")
+        else:
+            print_box_line()
+    print_box_bottom()
 
     # 检查是否有★胜招（任意含♦A出牌同盟无必胜序列）
     if has_star_winning:
@@ -187,22 +202,13 @@ def mode2_game_loop(state: GameState) -> None:
     current_sequence: list = find_best_response(state)
     if current_sequence:
         seq_text = format_best_response(current_sequence)
-        lines = []
-        for l in seq_text.split("\n"):
-            l = l.strip()
-            if l:
-                lines.append(("", l, False))
-        log_sequence("初始同盟最优序列", lines)
+        log_setup(["📋 同盟最优应对序列："] + [l for l in seq_text.split("\n") if l.strip()])
 
     # ── 动态分析阶段（强制执行）──
     while True:
         winner, game_over = check_terminal(state)
         if game_over:
-            log_section("游戏结束", "double")
-            if winner == 0:
-                log_star_win()
-            else:
-                log_star_lose(winner)
+            _print_game_end_box(winner)
             break
 
         if state.turn == 0:
@@ -220,18 +226,14 @@ def mode2_game_loop(state: GameState) -> None:
                 current_sequence = find_best_response(state)
                 if current_sequence:
                     seq_text = format_best_response(current_sequence)
-                    lines = []
-                    for l in seq_text.split("\n"):
-                        l = l.strip()
-                        if l:
-                            lines.append(("", l, False))
-                    log_sequence("全局最大接管，重新计算同盟最优序列", lines)
+                    log_setup(["📋 全局最大接管，重新计算同盟最优序列："] +
+                              [l for l in seq_text.split("\n") if l.strip()])
                 continue
 
             current_sequence = find_best_response(state)
             if current_sequence:
                 seq_text = format_best_response(current_sequence)
-                log_setup(seq_text.split("\n"))
+                log_setup(["📋 同盟最优应对序列："] + [l for l in seq_text.split("\n") if l.strip()])
             else:
                 log_event("✅", "此手仍在必胜域内，同盟暂无必胜策略")
         else:
@@ -243,18 +245,13 @@ def mode2_game_loop(state: GameState) -> None:
                     break
 
             # ── 验证强制出牌在当前状态下是否合法 ──
-            # _dfs_win_seq 不记录 Pass，实际游戏中玩家 Pass 会导致
-            # 序列错位：未来 relay 的出牌被错误匹配到当前 relay。
-            # 需要验证：(1) 牌还在手 (2) 牌型与当前 trick 匹配
             force_valid = False
             if forced_move:
                 player_mask = state.masks[state.turn]
                 move_orders = forced_move.orders
-                # 检查牌在手
                 cards_in_hand = all(
                     player_mask & (1 << o) for o in move_orders
                 )
-                # 检查牌型与当前 trick 匹配
                 if state.trick is not None:
                     type_ok = (state.trick.type == forced_move.type)
                 else:
@@ -273,8 +270,6 @@ def mode2_game_loop(state: GameState) -> None:
             else:
                 # 无强制序列或序列已失效（Pass 导致错位）→ 正常走
                 state = play_turn(state)
-                # 清空序列：后续对手回合也使用 play_turn（含最优策略）
-                # ★ 再次出牌时会通过上方逻辑重新计算 current_sequence
                 if current_sequence and not force_valid and forced_move:
                     log_event("⚠️", "预计算序列已失效（实际游戏与预测路径偏离），"
                                    "切换为实时策略模式")
