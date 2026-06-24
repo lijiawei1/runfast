@@ -116,24 +116,30 @@ def render_hand(
     orders = sorted(o for o in range(52) if mask & (1 << o))
     selected_set = set(selected_orders or [])
 
-    # ── clickable：st.button(type="tertiary") → 点击可靠，★前缀标记选中 ──
+    # ── clickable：st.button(type="tertiary") → 扑克牌样式 + 选中态 ──
     if clickable:
-        # 注入逐卡 CSS：红色花色 + 选中蓝框（尝试匹配 Streamlit 的 id）
+        # 逐卡 CSS：红色花色 + 选中蓝框发光上浮
         extra_css = ""
         for o in orders:
             suit = o % 4
-            if suit in (0, 2):
-                extra_css += f'button[kind="tertiary"][id*="card_{o}"]{{color:#d92121!important}}'
+            if suit in (0, 2):  # 红心/方片
+                extra_css += (
+                    f'button[kind="tertiary"][id*="card_{o}"],'
+                    f'button[kind="tertiary"][id*="card_{o}"] p{{'
+                    f'color:#d92121!important}}'
+                )
         for o in selected_set:
             extra_css += (
                 f'button[kind="tertiary"][id*="card_{o}"]{{'
                 f'border:2.5px solid #2563eb!important;'
-                f'box-shadow:0 8px 22px rgba(37,99,235,0.5)!important;'
-                f'transform:translateY(-8px) scale(1.15)!important;z-index:20!important}}'
+                f'outline-color:rgba(37,99,235,0.4)!important;'
+                f'box-shadow:0 0 0 4px rgba(37,99,235,0.15),0 8px 24px rgba(37,99,235,0.4)!important;'
+                f'transform:translateY(-10px) scale(1.15)!important;z-index:30!important}}'
             )
         if extra_css:
             st.markdown(f"<style>{extra_css}</style>", unsafe_allow_html=True)
 
+        # 用 columns 横向排卡，紧凑布局
         cols = st.columns(len(orders), gap="small")
         for idx, o in enumerate(orders):
             with cols[idx]:
@@ -142,9 +148,10 @@ def render_hand(
                 rank_str = RANK_NAMES.get(rank, str(rank))
                 suit_sym = {0: "♦", 1: "♣", 2: "♥", 3: "♠"}[suit]
                 is_sel = o in selected_set
-                prefix = "★ " if is_sel else ""
+                # 选中时标签加 ✓ 后缀（CSS 选中态失效时的兜底）
+                suffix = "\n✓" if is_sel else ""
                 st.button(
-                    label=f"{prefix}{rank_str}\n{suit_sym}",
+                    label=f"{rank_str}\n{suit_sym}{suffix}",
                     key=f"card_{o}",
                     on_click=toggle_callback,
                     args=(o,),

@@ -56,35 +56,82 @@ CSS_CODE = """
 
 /* ── 手牌区：st.button(type="tertiary") 塑形成 poker-card ── */
 
-/* 基座：扑克牌外观（tertiary 按钮，本项目无其他 tertiary 按钮） */
 button[kind="tertiary"] {
+    /* ── 卡牌尺寸与形状 ── */
     width: 3.2rem !important;
     height: 4.8rem !important;
     min-height: 0 !important;
-    padding: 0.25rem 0.2rem !important;
-    margin: 0 auto !important;
-    background: #fff !important;
-    border: 1px solid #ddd !important;
-    border-radius: 0.4rem !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
-    font-family: system-ui, -apple-system, sans-serif !important;
-    font-size: 1.15rem !important;
+    padding: 5px 6px !important;
+    margin: 3px !important;
+    border-radius: 5px !important;
+
+    /* ── 卡牌底色：米白仿纸质纹理 ── */
+    background:
+        linear-gradient(145deg, #fffef5 0%, #fcf9f0 40%, #f7f3e8 100%) !important;
+    border: 1px solid #c4bfb4 !important;
+    box-shadow:
+        0 2px 4px rgba(0,0,0,0.08),
+        0 1px 0 rgba(255,255,255,0.6) inset,
+        0 -1px 0 rgba(0,0,0,0.04) inset !important;
+
+    /* ── 内边框（卡牌装饰线）── */
+    outline: 1px solid rgba(180,170,155,0.25) !important;
+    outline-offset: -4px !important;
+
+    /* ── 排版 ── */
+    font-family: "Georgia", "Noto Serif", "Times New Roman", serif !important;
+    font-size: 1.22rem !important;
     font-weight: 700 !important;
-    line-height: 1.25 !important;
+    line-height: 1.15 !important;
     white-space: pre-line !important;
+    color: #1a1a1a !important;
+
+    /* ── 布局：文字靠左上，模仿真牌 rank+suit 布局 ── */
     display: inline-flex !important;
     flex-direction: column !important;
-    justify-content: center !important;
-    align-items: center !important;
+    justify-content: flex-start !important;
+    align-items: flex-start !important;
+
+    /* ── 交互 ── */
     cursor: pointer !important;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease !important;
-    color: #1e1e1e !important;
+    user-select: none !important;
+    position: relative !important;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 
-/* 悬停微上浮 */
+/* ── 按钮内层 div / p 标签排版 ── */
+button[kind="tertiary"] div,
+button[kind="tertiary"] p {
+    margin: 0 !important;
+    padding: 0 !important;
+    font-family: inherit !important;
+    font-weight: inherit !important;
+    line-height: 1.15 !important;
+    text-align: left !important;
+    width: 100% !important;
+    overflow: visible !important;
+}
+
+/* 第一行（rank）略大 */
+button[kind="tertiary"] p {
+    font-size: 1.22rem !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* ── 悬停：微上浮 + 加深阴影 ── */
 button[kind="tertiary"]:hover:not(:disabled) {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    transform: translateY(-3px) !important;
+    box-shadow:
+        0 6px 16px rgba(0,0,0,0.12),
+        0 1px 0 rgba(255,255,255,0.6) inset !important;
+    border-color: #b0a99c !important;
+}
+
+/* ── 按下：微缩回 ── */
+button[kind="tertiary"]:active:not(:disabled) {
+    transform: translateY(-1px) scale(0.97) !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+    transition: all 0.1s ease !important;
 }
 
 /* 历史出牌滚动容器 */
@@ -226,8 +273,10 @@ button[kind="tertiary"]:hover:not(:disabled) {
         width: 2.6rem !important;
         height: 3.9rem !important;
         font-size: 1.0rem !important;
-        padding: 0.15rem 0.15rem !important;
+        padding: 3px 4px !important;
+        outline-offset: -3px !important;
     }
+    button[kind="tertiary"] p { font-size: 1.0rem !important; }
     .trick-area { min-height: 4.5rem; padding: 0.4rem 0.3rem; }
     .hand-container { padding: 0.3rem 0.1rem; min-height: 4.4rem; }
 }
