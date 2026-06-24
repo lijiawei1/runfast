@@ -242,7 +242,26 @@ def mode2_game_loop(state: GameState) -> None:
                     forced_move = move
                     break
 
+            # ── 验证强制出牌在当前状态下是否合法 ──
+            # _dfs_win_seq 不记录 Pass，实际游戏中玩家 Pass 会导致
+            # 序列错位：未来 relay 的出牌被错误匹配到当前 relay。
+            # 需要验证：(1) 牌还在手 (2) 牌型与当前 trick 匹配
+            force_valid = False
             if forced_move:
+                player_mask = state.masks[state.turn]
+                move_orders = forced_move.orders
+                # 检查牌在手
+                cards_in_hand = all(
+                    player_mask & (1 << o) for o in move_orders
+                )
+                # 检查牌型与当前 trick 匹配
+                if state.trick is not None:
+                    type_ok = (state.trick.type == forced_move.type)
+                else:
+                    type_ok = True
+                force_valid = cards_in_hand and type_ok
+
+            if forced_move and force_valid:
                 # 强制执行预计算的出牌
                 executed_player = state.turn
                 state = execute_forced_move(state, forced_move)
@@ -252,8 +271,14 @@ def mode2_game_loop(state: GameState) -> None:
                     if not (p == executed_player and m == forced_move)
                 ]
             else:
-                # 无强制序列（如 Pass 场景），正常走
+                # 无强制序列或序列已失效（Pass 导致错位）→ 正常走
                 state = play_turn(state)
+                # 清空序列：后续对手回合也使用 play_turn（含最优策略）
+                # ★ 再次出牌时会通过上方逻辑重新计算 current_sequence
+                if current_sequence and not force_valid and forced_move:
+                    log_event("⚠️", "预计算序列已失效（实际游戏与预测路径偏离），"
+                                   "切换为实时策略模式")
+                current_sequence = []
 
 
 def main(config_path: str | None = None, scene_id: int | None = None,
