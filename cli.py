@@ -20,6 +20,8 @@ from log_engine import (
     log_global_max,
     print_box_bottom,
     print_box_line,
+    print_box_sep,
+    print_box_top,
     print_section_star,
     print_section_opponent,
 )
@@ -28,6 +30,45 @@ from log_engine import (
 def apply_move(state: GameState, move: tuple, player: int) -> GameState:
     """公开版本的 _apply_move，供外部调用。"""
     return _apply_move(state, move, player)
+
+
+# ── 抢A玩家选择（优化1：跳过轮询）──
+
+
+def select_bidder(hands: list[list], num_players: int = 5) -> int:
+    """显示所有玩家手牌（明牌），让用户直接选择抢A玩家序号。
+
+    替代原有的 take_bid() 轮询方式，一次输入确定★。
+    """
+    # ── 框内显示 ──
+    print()
+    print_box_top()
+    print_box_line("抢A玩家选择", align="center")
+    print_box_sep()
+
+    for i, hand in enumerate(hands):
+        cards_str = ", ".join(str(c) for c in sorted(hand, key=lambda c: c.order))
+        print_box_line(f"  玩家{i}: [{cards_str}]")
+
+    print_box_line()
+    # 输入循环
+    while True:
+        try:
+            inp = input(
+                f"  请输入抢A玩家序号 (0~{num_players - 1}): "
+            ).strip()
+            idx = int(inp)
+            if 0 <= idx < num_players:
+                print_box_line(f"  ★ 玩家{idx} 抢到A！")
+                print_box_bottom()
+                return idx
+            print(f"  ❌ 序号超出范围 (0~{num_players - 1})，"
+                  f"请重新输入。")
+        except ValueError:
+            print("  ❌ 请输入有效数字。")
+
+    # unreachable
+    return 0
 
 
 # ── 回合调度 ──

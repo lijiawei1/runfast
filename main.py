@@ -1,7 +1,7 @@
 """夺A快跑 — 演示入口"""
 import sys
 from models import GameState, Trick, Card, _TYPE_CN, format_cards
-from deck import build_deck, shuffle_and_deal, hands_to_masks, take_bid
+from deck import build_deck, shuffle_and_deal, hands_to_masks, take_bid_logic
 from moves import get_legal_moves_free
 from solver import solve, _apply_move, check_terminal
 from sequence import (
@@ -10,7 +10,7 @@ from sequence import (
     verify_all_da_moves, format_multi_da_verification,
     enumerate_da_moves,
 )
-from cli import play_turn, execute_forced_move
+from cli import play_turn, execute_forced_move, select_bidder
 from config_loader import load_yaml_config, validate_and_parse_scenario
 from log_engine import (
     log_setup, log_event, log_section, log_star_win, log_star_lose,
@@ -33,10 +33,9 @@ def setup_game(num_players: int = 5):
         lines.append(f"玩家{i}: {sorted(hand, key=lambda c: c.order)}")
     log_setup(lines)
 
-    bidder, updated_hands = take_bid(hands, num_players)
-    if bidder is None:
-        print("\n无人抢A，退出训练模式")
-        return None
+    # 直接选择抢A玩家（显示所有手牌，一次选定）
+    bidder = select_bidder(hands, num_players)
+    bidder, updated_hands = take_bid_logic(hands, bidder)
 
     log_event("🎯", f"玩家{bidder} 抢到A！")
     lines = ["=== 换手后手牌 ==="]
@@ -192,11 +191,10 @@ def mode2_game_loop(state: GameState) -> None:
 
     # 检查是否有★胜招（任意含♦A出牌同盟无必胜序列）
     if has_star_winning:
-        log_event("★", "有胜招，退出训练模式二")
-        return
-
-    # 所有含♦A出牌同盟都有必胜序列 → 进入强制执行模式
-    log_event("🚨", "进入强制执行模式：同盟将严格按最优路径出牌！")
+        log_event("★", "存在★胜招！同盟无必胜序列，进入自由对抗模式")
+    else:
+        # 所有含♦A出牌同盟都有必胜序列 → 进入强制执行模式
+        log_event("🚨", "进入强制执行模式：同盟将严格按最优路径出牌！")
 
     # 初始化强制序列（★还未出牌，从初始状态计算同盟最优应对）
     current_sequence: list = find_best_response(state)
