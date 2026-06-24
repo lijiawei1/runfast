@@ -19,13 +19,13 @@ _SUIT_HTML = {0: "&diams;", 1: "&clubs;", 2: "&hearts;", 3: "&spades;"}
 
 def format_hand_from_mask(mask: int) -> str:
     """从 mask 生成可读手牌，如 '♦A, ♣2, ♥3'"""
-    cards = [Card(o // 4, o % 4) for o in range(25) if mask & (1 << o)]
+    cards = [Card(o // 4, o % 4) for o in range(52) if mask & (1 << o)]
     return ", ".join(str(c) for c in cards)
 
 
 def format_player_hands(state: GameState) -> list[str]:
-    """返回5个玩家的手牌字符串列表"""
-    return [format_hand_from_mask(state.masks[i]) for i in range(5)]
+    """返回所有玩家的手牌字符串列表"""
+    return [format_hand_from_mask(state.masks[i]) for i in range(state.num_players)]
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -113,55 +113,43 @@ def render_hand(
             '<span style="color:#999;font-size:0.9rem;">（无手牌）</span></div>'
         )
 
-    orders = sorted(o for o in range(25) if mask & (1 << o))
+    orders = sorted(o for o in range(52) if mask & (1 << o))
     selected_set = set(selected_orders or [])
 
-    # ── clickable：透明按钮 + 卡片覆盖（inline style 实现选中上移+放大）──
+    # ── clickable：st.button(type="tertiary") → 点击可靠，★前缀标记选中 ──
     if clickable:
-        st.markdown('<div class="card-hand-area">', unsafe_allow_html=True)
-        container = st.container()
-        with container:
-            cols = st.columns(len(orders), gap="small")
-            for idx, o in enumerate(orders):
-                with cols[idx]:
-                    rank = o // 4
-                    suit = o % 4
-                    rank_str = RANK_NAMES.get(rank, str(rank))
-                    suit_cls = _SUIT_CLS.get(suit, "")
-                    suit_html = _SUIT_HTML.get(suit, "")
-                    is_sel = o in selected_set
+        # 注入逐卡 CSS：红色花色 + 选中蓝框（尝试匹配 Streamlit 的 id）
+        extra_css = ""
+        for o in orders:
+            suit = o % 4
+            if suit in (0, 2):
+                extra_css += f'button[kind="tertiary"][id*="card_{o}"]{{color:#d92121!important}}'
+        for o in selected_set:
+            extra_css += (
+                f'button[kind="tertiary"][id*="card_{o}"]{{'
+                f'border:2.5px solid #2563eb!important;'
+                f'box-shadow:0 8px 22px rgba(37,99,235,0.5)!important;'
+                f'transform:translateY(-8px) scale(1.15)!important;z-index:20!important}}'
+            )
+        if extra_css:
+            st.markdown(f"<style>{extra_css}</style>", unsafe_allow_html=True)
 
-                    # 透明迷你按钮（仅用于捕获点击事件）
-                    st.button(
-                        label=" ",
-                        key=f"card_{o}",
-                        on_click=toggle_callback,
-                        args=(o,),
-                        use_container_width=True,
-                    )
-
-                    if is_sel:
-                        overlay_style = (
-                            "margin:-22px auto -6px auto; "
-                            "transform:translateY(-8px) scale(1.08); "
-                            "border:2px solid #2563eb; "
-                            "box-shadow:0 6px 18px rgba(37,99,235,0.45); "
-                            "z-index:10; position:relative;"
-                        )
-                    else:
-                        overlay_style = "margin:-22px auto 0 auto; z-index:1; position:relative;"
-
-                    card_html = (
-                        f'<div class="poker-card" '
-                        f'style="pointer-events:none; box-sizing:border-box; '
-                        f'transition:all 0.15s ease; {overlay_style}">'
-                        f'<div><div class="rank">{rank_str}</div>'
-                        f'<div class="suit {suit_cls}">{suit_html}</div></div>'
-                        f'<div class="suit {suit_cls} suit-bottom">{suit_html}</div>'
-                        f'</div>'
-                    )
-                    st.markdown(card_html, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        cols = st.columns(len(orders), gap="small")
+        for idx, o in enumerate(orders):
+            with cols[idx]:
+                rank = o // 4
+                suit = o % 4
+                rank_str = RANK_NAMES.get(rank, str(rank))
+                suit_sym = {0: "♦", 1: "♣", 2: "♥", 3: "♠"}[suit]
+                is_sel = o in selected_set
+                prefix = "★ " if is_sel else ""
+                st.button(
+                    label=f"{prefix}{rank_str}\n{suit_sym}",
+                    key=f"card_{o}",
+                    on_click=toggle_callback,
+                    args=(o,),
+                    type="tertiary",
+                )
         return ""
 
     # ── 非 clickable：纯 HTML 渲染 ──

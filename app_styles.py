@@ -54,24 +54,37 @@ CSS_CODE = """
     box-shadow: 0 3px 8px rgba(0,0,0,0.18);
 }
 
-/* ── 卡片手牌区：透明按钮（仅作用于手牌区内）── */
-.card-hand-area div[data-testid="stButton"] > button {
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-    box-shadow: none !important;
-    min-height: 0 !important;
-    height: 8px !important;
-    overflow: hidden !important;
-}
+/* ── 手牌区：st.button(type="tertiary") 塑形成 poker-card ── */
 
-/* 手牌区内扑克牌固定大小（防止横向拉伸，与对手手牌一致） */
-.card-hand-area .poker-card {
+/* 基座：扑克牌外观（tertiary 按钮，本项目无其他 tertiary 按钮） */
+button[kind="tertiary"] {
     width: 3.2rem !important;
     height: 4.8rem !important;
-    flex-shrink: 0;
-    margin-left: auto !important;
-    margin-right: auto !important;
+    min-height: 0 !important;
+    padding: 0.25rem 0.2rem !important;
+    margin: 0 auto !important;
+    background: #fff !important;
+    border: 1px solid #ddd !important;
+    border-radius: 0.4rem !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    white-space: pre-line !important;
+    display: inline-flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    cursor: pointer !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease !important;
+    color: #1e1e1e !important;
+}
+
+/* 悬停微上浮 */
+button[kind="tertiary"]:hover:not(:disabled) {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
 }
 
 /* 历史出牌滚动容器 */
@@ -200,8 +213,8 @@ CSS_CODE = """
     box-shadow: 0 2px 8px rgba(37,99,235,0.3);
 }
 
-/* ── 移动端适配（复用 ts.py + 扩展）── */
-@media (max-width: 480px) {
+/* ── 移动端适配（6寸屏为主，不再为超小屏缩尺寸）── */
+@media (max-width: 640px) {
     .poker-card {
         width: 2.6rem;
         height: 3.9rem;
@@ -209,6 +222,12 @@ CSS_CODE = """
     }
     .poker-card .suit { font-size: 1.1rem; }
     .poker-card .rank { font-size: 0.95rem; }
+    button[kind="tertiary"] {
+        width: 2.6rem !important;
+        height: 3.9rem !important;
+        font-size: 1.0rem !important;
+        padding: 0.15rem 0.15rem !important;
+    }
     .trick-area { min-height: 4.5rem; padding: 0.4rem 0.3rem; }
     .hand-container { padding: 0.3rem 0.1rem; min-height: 4.4rem; }
 }

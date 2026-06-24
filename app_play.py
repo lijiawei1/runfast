@@ -247,7 +247,7 @@ def execute_star_play(state: GameState, move: tuple):
     _record_trick_entry(0, orders, type_cn)
     st.session_state.selected_orders = []
 
-    if st.session_state.mode == 2:
+    if st.session_state.training_mode == 2:
         _update_mode2_sequence(new_state)
     process_opponent_chain()
 
